@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ynab:
+  baseurl: "https://api.ynab.com/v1"
+  token: ${YNAB_TOKEN:}
+  budget-id: ${YNAB_BUDGET_ID:}
+
+telegram:
+  base-url: "https://api.telegram.org"
+  bot-token: ${TELEGRAM_BOT_TOKEN:}
+  webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+
+jobs:
+  cron: "0 0 7 * * *"
+  zone: "Asia/Jerusalem"
+  job-token: ${BUDGETBOT_JOB_TOKEN:}
+
+currency:
+  symbol: "₪"
+  fraction-digits: 2
+
+spring:
+  profiles:
+    default: dev
