@@ -23,8 +23,7 @@ public class BalanceService {
 
     public String currentAvailableBalanceText() {
         long milli = getBalanceWithKnowledge(null).valueMilli();
-        String formatted = moneyFormatter.formatMilliunits(milli);
-        return "Доступный баланс: " + formatted;
+        return formatAvailableBalance(milli);
     }
 
     public BalanceSnapshot getBalanceWithKnowledge(Long lastServerKnowledge) {
@@ -38,5 +37,10 @@ public class BalanceService {
         Long serverKnowledge = response.data().serverKnowledge();
 
         return new BalanceSnapshot(toBeBudgetedMilli, serverKnowledge);
+    }
+
+    public String formatAvailableBalance(long milli) {
+        String formatted = moneyFormatter.formatMilliunits(milli);
+        return "Доступный баланс: " + formatted;
     }
 }

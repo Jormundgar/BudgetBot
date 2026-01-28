@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -14,20 +15,23 @@ public class DynamoDbRecipientsStore implements RecipientsStore {
 
     private final DynamoDbClient dynamo;
     private final String table;
+    private final Clock clock;
 
     public DynamoDbRecipientsStore(
             DynamoDbClient dynamo,
-            @Value("${DYNAMODB_RECIPIENTS_TABLE}") String table
+            @Value("${DYNAMODB_RECIPIENTS_TABLE}") String table,
+            Clock clock
     ) {
         this.dynamo = dynamo;
         this.table = table;
+        this.clock = clock;
     }
 
     @Override
     public void add(long chatId) {
         Map<String, AttributeValue> item = Map.of(
                 "chatId", AttributeValue.fromN(Long.toString(chatId)),
-                "createdAt", AttributeValue.fromS(Instant.now().toString())
+                "createdAt", AttributeValue.fromS(Instant.now(clock).toString())
         );
 
         dynamo.putItem(PutItemRequest.builder()
