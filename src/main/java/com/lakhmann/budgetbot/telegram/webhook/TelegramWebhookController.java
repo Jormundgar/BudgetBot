@@ -3,6 +3,7 @@ package com.lakhmann.budgetbot.telegram.webhook;
 import com.lakhmann.budgetbot.config.properties.TelegramProperties;
 import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.telegram.TelegramClient;
+import com.lakhmann.budgetbot.telegram.TelegramMessages;
 import com.lakhmann.budgetbot.telegram.dto.TelegramUpdate;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.springframework.http.ResponseEntity;
@@ -55,7 +56,7 @@ public class TelegramWebhookController {
             return ResponseEntity.ok().build();
         }
 
-        if ("Получить актуальный баланс".equals(text)) {
+        if (TelegramMessages.BALANCE_COMMAND_TEXT.equals(text)) {
             telegramClient.sendPlainMessage(
                     chatId,
                     balanceService.currentAvailableBalanceText()

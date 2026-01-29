@@ -1,0 +1,83 @@
+name: Build & Deploy to ECS
+
+on:
+  push:
+    branches: ["master"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
+  ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "image=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t "${{ steps.meta.outputs.image }}" .
+
+      - name: Push Docker image
+        run: |
+          docker push "${{ steps.meta.outputs.image }}"
+
+      - name: Render task definition
+        run: |
+          jq \
+            --arg IMG "${{ steps.meta.outputs.image }}" \
+            --arg EXEC "${{ secrets.ECS_EXECUTION_ROLE_ARN }}" \
+            --arg TASK "${{ secrets.ECS_TASK_ROLE_ARN }}" \
+            '.executionRoleArn=$EXEC
+             | .taskRoleArn=$TASK
+             | (.containerDefinitions[] | select(.name=="'"$ECS_CONTAINER_NAME"'") | .image)=$IMG' \
+            ecs-taskdef.json > ecs-taskdef.rendered.json
+
+      - name: Register new task definition revision
+        id: taskdef
+        run: |
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://ecs-taskdef.rendered.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "arn=$ARN" >> $GITHUB_OUTPUT
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.taskdef.outputs.arn }}" \
+            --force-new-deployment
+
+      - name: Wait for stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"

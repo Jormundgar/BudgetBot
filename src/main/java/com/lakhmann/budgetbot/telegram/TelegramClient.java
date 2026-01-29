@@ -19,7 +19,7 @@ public class TelegramClient {
     public void ensureBottomKeyboard(long chatId) {
         Map<String, Object> keyboard = Map.of(
                 "keyboard", List.of(
-                        List.of(Map.of("text", "Получить актуальный баланс"))
+                        List.of(Map.of("text", TelegramMessages.BALANCE_COMMAND_TEXT))
                 ),
                 "resize_keyboard", true,
                 "one_time_keyboard", false
@@ -29,7 +29,7 @@ public class TelegramClient {
                 .uri("/sendMessage")
                 .body(Map.of(
                         "chat_id", chatId,
-                        "text", "Готово. Используй кнопку ниже 👇",
+                        "text", TelegramMessages.READY_MESSAGE_TEXT,
                         "reply_markup", keyboard
                 ))
                 .retrieve()

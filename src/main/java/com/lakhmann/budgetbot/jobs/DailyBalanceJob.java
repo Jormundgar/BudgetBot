@@ -1,37 +1,27 @@
 package com.lakhmann.budgetbot.jobs;
 
 import com.lakhmann.budgetbot.balance.BalanceService;
-import com.lakhmann.budgetbot.telegram.TelegramClient;
-import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
+import com.lakhmann.budgetbot.telegram.TelegramNotificationService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DailyBalanceJob {
 
-    private final TelegramClient telegramClient;
     private final BalanceService balanceService;
-    private final RecipientsStore recipientsStore;
+    private final TelegramNotificationService notificationService;
 
     public DailyBalanceJob(
-            TelegramClient telegramClient,
             BalanceService balanceService,
-            RecipientsStore recipientsStore
+            TelegramNotificationService notificationService
     ) {
-        this.telegramClient = telegramClient;
         this.balanceService = balanceService;
-        this.recipientsStore = recipientsStore;
+        this.notificationService = notificationService;
     }
 
     @Scheduled(cron = "${jobs.cron}", zone = "${jobs.zone}")
     public void run() {
-        var recipients = recipientsStore.listAll();
-        if (recipients.isEmpty()) return;
-
         String text = balanceService.currentAvailableBalanceText();
-
-        for (long chatId : recipients) {
-            telegramClient.sendPlainMessage(chatId, text);
-        }
+        notificationService.notifyAllRecipients(text);
     }
 }

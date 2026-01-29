@@ -3,6 +3,7 @@ package com.lakhmann.budgetbot.balance;
 import com.lakhmann.budgetbot.config.properties.JobsProperties;
 import com.lakhmann.budgetbot.integration.ynab.YnabClient;
 import com.lakhmann.budgetbot.integration.ynab.dto.YnabMonthResponse;
+import com.lakhmann.budgetbot.telegram.TelegramMessages;
 import org.springframework.stereotype.Service;
 
 import java.time.YearMonth;
@@ -41,6 +42,6 @@ public class BalanceService {
 
     public String formatAvailableBalance(long milli) {
         String formatted = moneyFormatter.formatMilliunits(milli);
-        return "Доступный баланс: " + formatted;
+        return TelegramMessages.AVAILABLE_BALANCE_PREFIX + formatted;
     }
 }
