@@ -34,11 +34,12 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compute image
+      - name: Compute image tag
         id: meta
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          echo "image=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${SHORT_SHA}"
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
         run: |
@@ -48,22 +49,37 @@ jobs:
         run: |
           docker push "${{ steps.meta.outputs.image }}"
 
-      - name: Render task definition
+      - name: Fetch current task definition from ECS
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_FAMILY" \
+            --query taskDefinition \
+            --output json > taskdef.current.json
+
+      - name: Clean task definition (remove readonly fields)
+        run: |
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          )' taskdef.current.json > taskdef.clean.json
+
+      - name: Patch image in task definition (only image)
         run: |
           jq \
             --arg IMG "${{ steps.meta.outputs.image }}" \
-            --arg EXEC "${{ secrets.ECS_EXECUTION_ROLE_ARN }}" \
-            --arg TASK "${{ secrets.ECS_TASK_ROLE_ARN }}" \
-            '.executionRoleArn=$EXEC
-             | .taskRoleArn=$TASK
-             | (.containerDefinitions[] | select(.name=="'"$ECS_CONTAINER_NAME"'") | .image)=$IMG' \
-            ecs-taskdef.json > ecs-taskdef.rendered.json
+            '(.containerDefinitions[] | select(.name=="'"$ECS_CONTAINER_NAME"'") | .image)=$IMG' \
+            taskdef.clean.json > taskdef.patched.json
 
       - name: Register new task definition revision
         id: taskdef
         run: |
           ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://ecs-taskdef.rendered.json \
+            --cli-input-json file://taskdef.patched.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
           echo "arn=$ARN" >> $GITHUB_OUTPUT
@@ -76,7 +92,7 @@ jobs:
             --task-definition "${{ steps.taskdef.outputs.arn }}" \
             --force-new-deployment
 
-      - name: Wait for stability
+      - name: Wait for service stability
         run: |
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
