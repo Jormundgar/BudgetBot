@@ -49,10 +49,10 @@ jobs:
         run: |
           docker push "${{ steps.meta.outputs.image }}"
 
-      - name: Fetch current task definition from ECS
+      - name: Fetch baseline task definition from ECS
         run: |
           aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_FAMILY" \
+            --task-definition "${{ vars.ECS_TASK_BASELINE }}" \
             --query taskDefinition \
             --output json > taskdef.current.json
 
