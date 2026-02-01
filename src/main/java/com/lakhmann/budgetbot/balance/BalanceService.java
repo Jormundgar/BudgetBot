@@ -6,6 +6,7 @@ import com.lakhmann.budgetbot.integration.ynab.dto.YnabMonthResponse;
 import com.lakhmann.budgetbot.telegram.TelegramMessages;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 
@@ -29,7 +30,12 @@ public class BalanceService {
 
     public BalanceSnapshot getBalanceWithKnowledge(Long lastServerKnowledge) {
         ZoneId zone = ZoneId.of(jobs.zone());
-        YearMonth target =  YearMonth.now(zone).plusMonths(1);
+        LocalDate today = LocalDate.now(zone);
+
+        YearMonth target =  today.getDayOfMonth() <= 10
+                ? YearMonth.from(today)
+                : YearMonth.from(today).plusMonths(1);
+        
         String monthParam = target.atDay(1).toString();
 
         YnabMonthResponse response = ynabClient.getMonth(monthParam, lastServerKnowledge);
