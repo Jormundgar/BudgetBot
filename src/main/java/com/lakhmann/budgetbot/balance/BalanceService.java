@@ -35,7 +35,7 @@ public class BalanceService {
         YearMonth target =  today.getDayOfMonth() <= 10
                 ? YearMonth.from(today)
                 : YearMonth.from(today).plusMonths(1);
-        
+
         String monthParam = target.atDay(1).toString();
 
         YnabMonthResponse response = ynabClient.getMonth(monthParam, lastServerKnowledge);

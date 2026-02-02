@@ -18,7 +18,73 @@ env:
   ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+
+      - name: Run tests and quality gate
+        run: |
+          set -o pipefail
+          ./mvnw -B -ntp clean verify pitest:mutationCoverage | tee maven.log
+
+      - name: Publish Unit Test Results (Surefire)
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Tests (Surefire)
+          path: target/surefire-reports/TEST-*.xml
+          reporter: java-junit
+
+      - name: Publish Integration Test Results (Failsafe)
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Integration Tests (Failsafe)
+          path: target/failsafe-reports/TEST-*.xml
+          reporter: java-junit
+
+      - name: Upload Surefire reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+
+      - name: Upload Failsafe reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: failsafe-reports
+          path: target/failsafe-reports
+
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
+
+      - name: Upload PIT report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pit-report
+          path: target/pit-reports
+
   deploy:
+    needs: test
+    if: needs.test.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
