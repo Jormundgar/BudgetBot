@@ -50,4 +50,8 @@ public class BalanceService {
         String formatted = moneyFormatter.formatMilliunits(milli);
         return TelegramMessages.AVAILABLE_BALANCE_PREFIX + formatted;
     }
+
+    public BalanceSnapshot forceRefreshSnapshot() {
+        return getBalanceWithKnowledge(null);
+    }
 }

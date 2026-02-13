@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>BudgetBot Mini App (MVP)</title>
+
+    <!-- Telegram Mini App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+        button { padding: 10px 12px; font-size: 16px; }
+        .row { margin: 12px 0; }
+        pre { background: #f4f4f4; padding: 12px; border-radius: 8px; overflow: auto; }
+    </style>
+</head>
+
+<body>
+<h2>BudgetBot Mini App</h2>
+
+<div class="row">
+    <div>Статус: <b id="status">init…</b></div>
+</div>
+
+<div class="row">
+    <div>Баланс: <b id="balance">—</b></div>
+    <div>Обновлено: <span id="updatedAt">—</span></div>
+</div>
+
+<div class="row">
+    <button id="refreshBtn">Обновить</button>
+</div>
+
+<details class="row">
+    <summary>debug</summary>
+    <pre id="debug"></pre>
+</details>
+
+<script>
+    const statusEl = document.getElementById('status');
+    const balanceEl = document.getElementById('balance');
+    const updatedAtEl = document.getElementById('updatedAt');
+    const debugEl = document.getElementById('debug');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    function setStatus(text) { statusEl.textContent = text; }
+    function setDebug(obj) { debugEl.textContent = JSON.stringify(obj, null, 2); }
+
+    const tg = window.Telegram?.WebApp;
+
+    async function postJson(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = { raw: text }; }
+
+        if (!res.ok) {
+            throw { status: res.status, body: json };
+        }
+        return json;
+    }
+
+    async function callApi(endpoint) {
+        if (!tg) {
+            setStatus("Открой Mini App внутри Telegram");
+            setDebug({ openedInsideTelegram: false });
+            return;
+        }
+
+        tg.ready();
+
+        const initData = tg.initData || "";
+        const initDataUnsafe = tg.initDataUnsafe || {};
+
+        setDebug({
+            openedInsideTelegram: true,
+            initDataPresent: !!initData,
+            initDataUnsafe
+        });
+
+        setStatus("Запрос к серверу...");
+        const data = await postJson(endpoint, { initData });
+
+        balanceEl.textContent = data.balanceText ?? (data.balanceMilli / 1000);
+        updatedAtEl.textContent = data.updatedAt ?? "—";
+        setStatus("OK");
+    }
+
+    refreshBtn.addEventListener('click', async () => {
+        try {
+            await callApi('/api/miniapp/refresh');
+        } catch (e) {
+            if (e?.status === 401) {
+                setStatus("401: initData не прошло проверку (открой в Telegram)");
+            } else {
+                setStatus("Ошибка refresh");
+            }
+            setDebug(e);
+        }
+    });
+
+    (async () => {
+        try {
+            await callApi('/api/miniapp/balance');
+        } catch (e) {
+            if (e?.status === 401) {
+                setStatus("401: initData не прошло проверку (открой в Telegram)");
+            } else {
+                setStatus("Ошибка initial load");
+            }
+            setDebug(e);
+        }
+    })();
+</script>
+</body>
+</html>
