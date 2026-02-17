@@ -4,6 +4,7 @@ import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/miniapp")
@@ -18,13 +20,16 @@ public class MiniAppController {
 
     private final BalanceService balanceService;
     private final RecipientsStore  recipientsStore;
+    private final MiniAppService  miniAppService;
     @Value("${telegram.bot-token}")
     private String botToken;
 
     public MiniAppController(BalanceService balanceService,
-                             RecipientsStore recipientsStore) {
+                             RecipientsStore recipientsStore,
+                             MiniAppService miniAppService) {
         this.balanceService = balanceService;
         this.recipientsStore = recipientsStore;
+        this.miniAppService = miniAppService;
     }
 
     @PostMapping("/balance")
@@ -63,6 +68,11 @@ public class MiniAppController {
                 Instant.now().toString(),
                 userId
         );
+    }
+
+    @GetMapping("/transactions")
+    public List<MiniAppTransactionDto> lastTransactions() {
+        return miniAppService.lastSixTransactions();
     }
 
     private void requireAllowed(long telegramUserId) {

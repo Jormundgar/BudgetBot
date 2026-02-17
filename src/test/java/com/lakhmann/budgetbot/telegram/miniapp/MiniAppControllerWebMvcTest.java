@@ -48,6 +48,10 @@ class MiniAppControllerWebMvcTest {
     @MockBean
     private RecipientsStore recipientsStore;
 
+    @MockBean
+    private MiniAppService miniAppService;
+
+
     @Test
     void returnsUnauthorizedWhenInitDataIsInvalid() throws Exception {
         mockMvc.perform(post("/api/miniapp/balance")
