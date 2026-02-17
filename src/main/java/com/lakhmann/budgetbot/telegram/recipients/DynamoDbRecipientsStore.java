@@ -57,4 +57,15 @@ public class DynamoDbRecipientsStore implements RecipientsStore {
                 .map(i -> Long.parseLong(i.get("chatId").n()))
                 .toList();
     }
+
+    @Override
+    public boolean contains(long chatId) {
+        GetItemResponse resp = dynamo.getItem(GetItemRequest.builder()
+                .tableName(table)
+                .key(Map.of("chatId", AttributeValue.fromN(Long.toString(chatId))))
+                .consistentRead(false)
+                .build());
+
+        return resp.hasItem() && resp.item() != null && !resp.item().isEmpty();
+    }
 }

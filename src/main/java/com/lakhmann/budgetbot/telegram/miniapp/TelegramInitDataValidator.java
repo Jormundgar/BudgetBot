@@ -94,4 +94,21 @@ public class TelegramInitDataValidator {
         public static ValidationResult valid(Map<String, String> params) { return new ValidationResult(true, null, params); }
         public static ValidationResult invalid(String error) { return new ValidationResult(false, error, null); }
     }
+
+    public static Long extractUserId(ValidationResult vr) {
+        if (vr == null || !vr.valid() || vr.params() == null) return null;
+
+        String userJson = vr.params().get("user");
+        if (userJson == null || userJson.isBlank()) return null;
+        int idx = userJson.indexOf("\"id\":");
+        if (idx < 0) return null;
+        int start = idx + 5;
+        int end = start;
+        while (end < userJson.length() && Character.isDigit(userJson.charAt(end))) end++;
+        try {
+            return Long.parseLong(userJson.substring(start, end));
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

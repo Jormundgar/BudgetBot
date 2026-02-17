@@ -1,6 +1,7 @@
 package com.lakhmann.budgetbot.telegram.miniapp;
 
 import com.lakhmann.budgetbot.balance.BalanceService;
+import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,11 +17,14 @@ import java.time.Instant;
 public class MiniAppController {
 
     private final BalanceService balanceService;
+    private final RecipientsStore  recipientsStore;
     @Value("${telegram.bot-token}")
     private String botToken;
 
-    public MiniAppController(BalanceService balanceService) {
+    public MiniAppController(BalanceService balanceService,
+                             RecipientsStore recipientsStore) {
         this.balanceService = balanceService;
+        this.recipientsStore = recipientsStore;
     }
 
     @PostMapping("/balance")
@@ -31,11 +35,14 @@ public class MiniAppController {
         }
 
         var snap = balanceService.getBalanceWithKnowledge(null);
+        Long userId = TelegramInitDataValidator.extractUserId(vr);
+        requireAllowed(userId);
 
         return new MiniAppBalanceResponse(
                 snap.valueMilli(),
                 balanceService.formatAvailableBalance(snap.valueMilli()),
-                Instant.now().toString()
+                Instant.now().toString(),
+                userId
         );
     }
 
@@ -47,11 +54,23 @@ public class MiniAppController {
         }
 
         var snap = balanceService.forceRefreshSnapshot();
+        Long userId = TelegramInitDataValidator.extractUserId(vr);
+        requireAllowed(userId);
 
         return new MiniAppBalanceResponse(
                 snap.valueMilli(),
                 balanceService.formatAvailableBalance(snap.valueMilli()),
-                Instant.now().toString()
+                Instant.now().toString(),
+                userId
         );
+    }
+
+    private void requireAllowed(long telegramUserId) {
+        if (!recipientsStore.contains(telegramUserId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Not allowed. Send /start to the bot first."
+            );
+        }
     }
 }

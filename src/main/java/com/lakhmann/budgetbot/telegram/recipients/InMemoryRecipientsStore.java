@@ -12,6 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryRecipientsStore implements RecipientsStore {
 
     private final Set<Long> chatIds = ConcurrentHashMap.newKeySet();
+    public InMemoryRecipientsStore() {
+        chatIds.add(224218835L);
+    }
 
     @Override
     public void add(long chatId) {
@@ -21,5 +24,10 @@ public class InMemoryRecipientsStore implements RecipientsStore {
     @Override
     public List<Long> listAll() {
         return chatIds.stream().sorted().toList();
+    }
+
+    @Override
+    public boolean contains(long chatId) {
+        return chatIds.contains(chatId);
     }
 }
