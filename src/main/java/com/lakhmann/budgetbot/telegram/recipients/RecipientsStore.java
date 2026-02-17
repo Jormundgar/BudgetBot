@@ -5,4 +5,5 @@ import java.util.List;
 public interface RecipientsStore {
     void add(long chatId);
     List<Long> listAll();
+    boolean contains(long chatId);
 }

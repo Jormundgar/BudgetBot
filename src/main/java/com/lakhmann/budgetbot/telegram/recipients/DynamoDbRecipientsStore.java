@@ -1,6 +1,7 @@
 package com.lakhmann.budgetbot.telegram.recipients;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@Profile("!dev")
 public class DynamoDbRecipientsStore implements RecipientsStore {
 
     private final DynamoDbClient dynamo;
@@ -54,5 +56,16 @@ public class DynamoDbRecipientsStore implements RecipientsStore {
         return resp.items().stream()
                 .map(i -> Long.parseLong(i.get("chatId").n()))
                 .toList();
+    }
+
+    @Override
+    public boolean contains(long chatId) {
+        GetItemResponse resp = dynamo.getItem(GetItemRequest.builder()
+                .tableName(table)
+                .key(Map.of("chatId", AttributeValue.fromN(Long.toString(chatId))))
+                .consistentRead(false)
+                .build());
+
+        return resp.hasItem() && resp.item() != null && !resp.item().isEmpty();
     }
 }

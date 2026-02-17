@@ -20,6 +20,7 @@ telegram:
   base-url: "https://api.telegram.org"
   bot-token: ${TELEGRAM_BOT_TOKEN:}
   webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+  miniapp-url: ${TELEGRAM_MINIAPP_URL:}}
 
 jobs:
   cron: "0 0 7 * * *"

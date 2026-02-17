@@ -10,7 +10,8 @@ public record TelegramProperties(
         String baseUrl,
         String botToken,
         String recipients,
-        String webhookSecret
+        String webhookSecret,
+        String miniappUrl
 ) {
     public List<Long> recipientIds() {
         if (recipients == null || recipients.isBlank()) return List.of();
