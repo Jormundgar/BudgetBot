@@ -18,6 +18,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 @WebMvcTest(MiniAppController.class)
 @TestPropertySource(properties = "telegram.bot-token=test-bot-token")
@@ -47,6 +49,10 @@ class MiniAppControllerWebMvcTest {
 
     @MockBean
     private RecipientsStore recipientsStore;
+
+    @MockBean
+    private MiniAppService miniAppService;
+
 
     @Test
     void returnsUnauthorizedWhenInitDataIsInvalid() throws Exception {
@@ -105,6 +111,22 @@ class MiniAppControllerWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.balanceMilli").value(5000))
                 .andExpect(jsonPath("$.telegramUserId").value(2024));
+    }
+
+    @Test
+    void returnsLastTransactions() throws Exception {
+        when(miniAppService.lastSixTransactions()).thenReturn(List.of(
+                new MiniAppTransactionDto("t1", "Кофе", "Сегодня • Еда", "₽1.00"),
+                new MiniAppTransactionDto("t2", "Такси", "Вчера • Транспорт", "₽5.00")
+        ));
+
+        mockMvc.perform(get("/api/miniapp/transactions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("t1"))
+                .andExpect(jsonPath("$[0].title").value("Кофе"))
+                .andExpect(jsonPath("$[1].secondaryText").value("Вчера • Транспорт"));
+
+        verify(miniAppService).lastSixTransactions();
     }
 
     private String jsonBody(String initData) throws Exception {
