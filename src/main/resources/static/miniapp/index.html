@@ -289,10 +289,10 @@
 
         <div class="hint" id="hint"></div>
 
-<!--        <details>-->
-<!--            <summary>debug</summary>-->
-<!--            <pre id="debug">{}</pre>-->
-<!--        </details>-->
+        <details>
+            <summary>debug</summary>
+            <pre id="debug">{}</pre>
+        </details>
     </div>
 
     <section class="transactions">
@@ -369,9 +369,7 @@
             const title = escapeHtml(rawTitle);
             const secondary = escapeHtml(rawSecondary);
             const amount = escapeHtml(rawAmount);
-
-            const status = index === 0 && rawSecondary.includes('Сегодня') ? 'Pending' : 'Cleared';
-
+            
             return `
                 <article class="tx-row">
                     <div class="tx-left">
