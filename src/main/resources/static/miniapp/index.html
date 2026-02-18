@@ -22,6 +22,9 @@
             --radius: 20px;
 
             --btnBorder: rgba(255,255,255,.18);
+            --rowBg: rgba(255,255,255,.05);
+            --rowBorder: rgba(255,255,255,.10);
+            --statusOk: #6ddcc8;
         }
 
         * { box-sizing: border-box; }
@@ -49,7 +52,6 @@
             background: var(--bg);
         }
 
-        /* Фон отдельным слоем */
         .bg {
             position: fixed;
             inset: 0;
@@ -61,12 +63,11 @@
             opacity: 1;
         }
 
-        /* Контент */
         .wrap {
             position: relative;
             max-width: 560px;
             margin: 0 auto;
-            padding: 0; /* без лишнего */
+            padding: 0;
         }
 
         .card {
@@ -120,11 +121,107 @@
         }
         .btn:active { transform: scale(.985); opacity: .92; }
 
+        .transactions {
+            margin-top: 18px;
+            padding: 0 2px;
+        }
+
+        .transactions-title {
+            margin: 0 0 12px;
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .tx-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tx-row {
+            border-radius: 16px;
+            border: 1px solid var(--rowBorder);
+            background: var(--rowBg);
+            box-shadow: 0 8px 20px rgba(0,0,0,.16);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .tx-left {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tx-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(160deg, #4e7bff, #32b8a6);
+            flex-shrink: 0;
+        }
+
+        .tx-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tx-sub {
+            margin: 1px 0 0;
+            font-size: 15px;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tx-right {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .tx-amount {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .tx-status {
+            margin: 1px 0 0;
+            font-size: 14px;
+            color: var(--statusOk);
+            font-weight: 600;
+        }
+
+        .tx-empty {
+            border-radius: 16px;
+            border: 1px dashed var(--rowBorder);
+            background: rgba(255,255,255,.03);
+            padding: 14px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
         .hint {
             margin-top: 12px;
             font-size: 12px;
             color: var(--muted2);
-            min-height: 16px; /* чтобы не прыгало */
+            min-height: 16px;
         }
 
         details {
@@ -152,7 +249,6 @@
             white-space: pre-wrap;
         }
 
-        /* Light theme */
         body.light {
             --bg: #f4f6f9;
             --text: #101114;
@@ -165,6 +261,9 @@
 
             --shadow: 0 14px 30px rgba(0,0,0,.08);
             --btnBorder: rgba(0,0,0,.08);
+            --rowBg: rgba(255,255,255,.8);
+            --rowBorder: rgba(0,0,0,.08);
+            --statusOk: #1a9987;
         }
 
         body.light .bg {
@@ -202,9 +301,15 @@
             <pre id="debug">{}</pre>
         </details>
     </div>
+
+    <section class="transactions">
+        <h2 class="transactions-title">Последние транзакции</h2>
+        <div class="tx-list" id="txList"></div>
+    </section>
 </div>
 
 <script>
+    console.log("MINIAPP JS LOADED v2", new Date().toISOString());
     const tg = window.Telegram?.WebApp;
 
     const labelEl = document.getElementById('label');
@@ -213,6 +318,7 @@
     const hintEl = document.getElementById('hint');
     const debugEl = document.getElementById('debug');
     const refreshBtn = document.getElementById('refreshBtn');
+    const txListEl = document.getElementById('txList');
 
     function setHint(text) {
         hintEl.textContent = text || "";
@@ -231,12 +337,63 @@
     function formatTimeHHMM(iso) {
         try {
             const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return "—";
             const hh = String(d.getHours()).padStart(2, '0');
             const mm = String(d.getMinutes()).padStart(2, '0');
             return `${hh}:${mm}`;
         } catch {
             return "—";
         }
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function getIconText(title) {
+        const t = (title || '').trim();
+        return t ? escapeHtml(t[0].toUpperCase()) : '₽';
+    }
+
+    function renderTransactions(items) {
+        const six = (items || []).slice(0, 6);
+
+        if (six.length === 0) {
+            txListEl.innerHTML = '<div class="tx-empty">Транзакций пока нет</div>';
+            return;
+        }
+
+        txListEl.innerHTML = six.map((tx, index) => {
+            const rawTitle = tx?.title || 'Транзакция';
+            const rawSecondary = tx?.secondaryText || '';
+            const rawAmount = tx?.amount || '0.00';
+
+            const title = escapeHtml(rawTitle);
+            const secondary = escapeHtml(rawSecondary);
+            const amount = escapeHtml(rawAmount);
+
+            const status = index === 0 && rawSecondary.includes('Сегодня') ? 'Pending' : 'Cleared';
+
+            return `
+                <article class="tx-row">
+                    <div class="tx-left">
+                        <div class="tx-icon">${getIconText(rawTitle)}</div>
+                        <div>
+                            <p class="tx-title">${title}</p>
+                            <p class="tx-sub">${secondary}</p>
+                        </div>
+                    </div>
+                    <div class="tx-right">
+                        <p class="tx-amount">${amount}</p>
+                    </div>
+                </article>
+            `;
+        }).join('');
     }
 
     async function postJson(url, body) {
@@ -253,8 +410,18 @@
         return json;
     }
 
+    async function getJson(url) {
+        const res = await fetch(url);
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = []; }
+        if (!res.ok) throw { status: res.status, body: json };
+        return json;
+    }
+
     async function callApi(endpoint) {
         try {
+            setDebug({ hasTelegram: !!window.Telegram, hasWebApp: !!window.Telegram?.WebApp });
             if (!tg) {
                 setHint("Открой Mini App внутри Telegram");
                 return;
@@ -267,7 +434,16 @@
 
             setHint("Загрузка…");
 
-            const data = await postJson(endpoint, { initData });
+            setDebug({
+                pageHref: location.href,
+                pageOrigin: location.origin,
+                txFetchUrl: new URL('/api/miniapp/transactions', location.origin).toString()
+            });
+
+            const [data, transactions] = await Promise.all([
+                postJson(endpoint, { initData }),
+                getJson('/api/miniapp/transactions')
+            ]);
 
             const fullText = data.balanceText || "";
             const parts = fullText.split(":");
@@ -283,12 +459,14 @@
             labelEl.textContent = label;
             amountEl.textContent = amount;
             updatedAtEl.textContent = formatTimeHHMM(data.updatedAt);
+            renderTransactions(transactions);
 
-            setHint(""); // ничего не показываем если всё ок
-            setDebug({ endpoint, response: data });
+            setHint("");
+            setDebug({ endpoint, response: data, transactionsCount: transactions.length });
 
         } catch (e) {
             setHint("Ошибка (см. debug)");
+            renderTransactions([]);
             setDebug(e);
         }
     }
