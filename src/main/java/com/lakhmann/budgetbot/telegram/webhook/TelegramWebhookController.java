@@ -1,9 +1,7 @@
 package com.lakhmann.budgetbot.telegram.webhook;
 
 import com.lakhmann.budgetbot.config.properties.TelegramProperties;
-import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.telegram.TelegramClient;
-import com.lakhmann.budgetbot.telegram.TelegramMessages;
 import com.lakhmann.budgetbot.telegram.dto.TelegramUpdate;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.springframework.http.ResponseEntity;
@@ -18,18 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class TelegramWebhookController {
 
     private final TelegramClient telegramClient;
-    private final BalanceService balanceService;
     private final TelegramProperties props;
     private final RecipientsStore recipientsStore;
 
     public TelegramWebhookController(
             TelegramClient telegramClient,
-            BalanceService balanceService,
             TelegramProperties props,
             RecipientsStore recipientsStore
     ) {
         this.telegramClient = telegramClient;
-        this.balanceService = balanceService;
         this.props = props;
         this.recipientsStore = recipientsStore;
     }
@@ -53,14 +48,6 @@ public class TelegramWebhookController {
         if ("/start".equals(text)) {
             recipientsStore.add(chatId);
             telegramClient.ensureBottomKeyboard(chatId);
-            return ResponseEntity.ok().build();
-        }
-
-        if (TelegramMessages.BALANCE_COMMAND_TEXT.equals(text)) {
-            telegramClient.sendPlainMessage(
-                    chatId,
-                    balanceService.currentAvailableBalanceText()
-            );
         }
 
         return ResponseEntity.ok().build();

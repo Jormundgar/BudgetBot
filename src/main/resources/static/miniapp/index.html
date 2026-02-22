@@ -254,6 +254,7 @@
         <div class="updated">Обновлено <span id="updatedAt">—</span></div>
 
         <button class="btn" id="refreshBtn">Обновить</button>
+        <button class="btn" id="connectBtn" style="margin-top:10px">Подключить YNAB</button>
 
         <div class="hint" id="hint"></div>
     </div>
@@ -273,6 +274,7 @@
     const hintEl = document.getElementById('hint');
     const refreshBtn = document.getElementById('refreshBtn');
     const txListEl = document.getElementById('txList');
+    const connectBtn = document.getElementById('connectBtn');
 
     function setHint(text) {
         hintEl.textContent = text || "";
@@ -358,8 +360,8 @@
         return json;
     }
 
-    async function getJson(url) {
-        const res = await fetch(url);
+    async function getJson(url, body) {
+        const res = await fetch(url, {method:'POST', headers:{ 'Content-Type': 'application/json' }, body: JSON.stringify(body)});
         const text = await res.text();
         let json;
         try { json = JSON.parse(text); } catch { json = []; }
@@ -383,7 +385,7 @@
 
             const [data, transactions] = await Promise.all([
                 postJson(endpoint, { initData }),
-                getJson('/api/miniapp/transactions')
+                getJson('/api/miniapp/transactions', { initData })
             ]);
 
             const fullText = data.balanceText || "";
@@ -411,6 +413,14 @@
     }
 
     refreshBtn.addEventListener('click', () => callApi('/api/miniapp/refresh'));
+    connectBtn.addEventListener('click', async () => {
+        if (!tg) return;
+        const initData = tg.initData || '';
+        try {
+            const r = await postJson('/api/miniapp/oauth/start', { initData });
+            if (r.url) window.location.href = r.url;
+        } catch (e) { setHint('Не удалось начать OAuth'); }
+    });
     callApi('/api/miniapp/balance');
 </script>
 </body>

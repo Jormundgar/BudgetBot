@@ -5,7 +5,8 @@ import com.lakhmann.budgetbot.config.properties.JobsProperties;
 import com.lakhmann.budgetbot.integration.ynab.YnabClient;
 import com.lakhmann.budgetbot.integration.ynab.dto.YnabTransactionsResponse;
 
-import com.lakhmann.budgetbot.telegram.miniapp.MiniAppTransactionDto;
+import com.lakhmann.budgetbot.user.UserYnabAuthService;
+import com.lakhmann.budgetbot.user.YnabUserSession;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -23,25 +24,30 @@ public class MiniAppService {
     private final MoneyFormatter moneyFormatter;
     private final Clock clock;
     private final JobsProperties jobs;
+    private final UserYnabAuthService authService;
 
     public MiniAppService(
             YnabClient ynabClient,
             MoneyFormatter moneyFormatter,
             Clock clock,
-            JobsProperties jobs
+            JobsProperties jobs,
+            UserYnabAuthService authService
     ) {
         this.ynabClient = ynabClient;
         this.moneyFormatter = moneyFormatter;
         this.clock = clock;
         this.jobs = jobs;
+        this.authService = authService;
     }
 
-    public List<MiniAppTransactionDto> lastSixTransactions() {
+    public List<MiniAppTransactionDto> lastSixTransactions(long userId) {
         ZoneId zone = ZoneId.of(jobs.zone());
         LocalDate today = LocalDate.now(clock.withZone(zone));
         LocalDate since = today.minusDays(30);
+        YnabUserSession session = authService.sessionFor(userId);
 
-        List<YnabTransactionsResponse.Transaction> tx = ynabClient.getTransactionsSince(since);
+        List<YnabTransactionsResponse.Transaction> tx = ynabClient.getTransactionsSince(
+                session.accessToken(), session.budgetId(), since);
 
         return tx.stream()
                 .filter(t -> t.deleted() == null || !t.deleted())
@@ -60,7 +66,7 @@ public class MiniAppService {
 
         String category = (t.categoryName() != null && !t.categoryName().isBlank())
                 ? t.categoryName()
-                : "Без категории"; // категория должна быть всегда
+                : "Без категории";
 
         String secondaryText = formatDateLabel(t.date(), today) + " • " + category;
 

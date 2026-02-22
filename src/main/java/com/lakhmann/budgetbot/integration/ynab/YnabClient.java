@@ -1,9 +1,10 @@
 package com.lakhmann.budgetbot.integration.ynab;
 
-import com.lakhmann.budgetbot.config.properties.YnabProperties;
+import com.lakhmann.budgetbot.integration.ynab.dto.YnabBudgetsResponse;
 import com.lakhmann.budgetbot.integration.ynab.dto.YnabMonthResponse;
 import com.lakhmann.budgetbot.integration.ynab.dto.YnabTransactionsResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -14,36 +15,52 @@ import java.util.List;
 public class YnabClient {
 
     private final RestClient ynabRestClient;
-    private final YnabProperties props;
 
-    public YnabClient(@Qualifier("ynabRestClient") RestClient ynabRestClient, YnabProperties props) {
+    public YnabClient(@Qualifier("ynabRestClient") RestClient ynabRestClient) {
         this.ynabRestClient = ynabRestClient;
-        this.props = props;
     }
 
-    public YnabMonthResponse getMonth(String monthParam) {
-        return getMonth(monthParam, null);
-    }
-
-    public YnabMonthResponse getMonth(String monthParam, Long lastKnowledgeOfServer) {
+    public YnabMonthResponse getMonth(
+            String accessToken,
+            String budgetId,
+            String monthParam,
+            Long lastKnowledgeOfServer) {
         return ynabRestClient.get()
                 .uri(uriBuilder -> {
                     var b = uriBuilder.path("/budgets/{budgetId}/months/{month}");
                     if (lastKnowledgeOfServer != null) {
                         b = b.queryParam("last_knowledge_of_server", lastKnowledgeOfServer);
                     }
-                    return b.build(props.budgetId(), monthParam);
+                    return b.build(budgetId, monthParam);
                 })
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .retrieve()
                 .body(YnabMonthResponse.class);
     }
 
-    public List<YnabTransactionsResponse.Transaction> getTransactionsSince(LocalDate sinceDate) {
+    public String getPrimaryBudgetId(String accessToken) {
+        YnabBudgetsResponse response = ynabRestClient.get()
+                .uri("/budgets")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .body(YnabBudgetsResponse.class);
+
+        if (response == null || response.data() == null || response.data().budgets() == null || response.data().budgets().isEmpty()) {
+            throw new IllegalStateException("No YNAB budgets available for user");
+        }
+        return response.data().budgets().get(0).id();
+    }
+
+    public List<YnabTransactionsResponse.Transaction> getTransactionsSince(
+            String accessToken,
+            String budgetId,
+            LocalDate sinceDate) {
         YnabTransactionsResponse resp = ynabRestClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/budgets/{budgetId}/transactions")
                         .queryParam("since_date", sinceDate)
-                        .build(props.budgetId()))
+                        .build(budgetId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .retrieve()
                 .body(YnabTransactionsResponse.class);
 

@@ -12,15 +12,18 @@ management:
         enabled: true
 
 ynab:
-  baseurl: "https://api.ynab.com/v1"
-  token: ${YNAB_TOKEN:}
-  budget-id: ${YNAB_BUDGET_ID:}
+  base-url: "https://api.ynab.com/v1"
+  oauth-authorize-url: "https://app.ynab.com/oauth/authorize"
+  oauth-token-url: "/oauth/token"
+  client-id: ${YNAB_CLIENT_ID:}
+  client-secret: ${YNAB_CLIENT_SECRET:}
+  redirect-uri: ${YNAB_REDIRECT_URI:}
 
 telegram:
   base-url: "https://api.telegram.org"
   bot-token: ${TELEGRAM_BOT_TOKEN:}
   webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
-  miniapp-url: ${TELEGRAM_MINIAPP_URL:}}
+  miniapp-url: ${TELEGRAM_MINIAPP_URL:}
 
 jobs:
   cron: "0 0 7 * * *"

@@ -22,7 +22,6 @@ public class HttpClientsConfig {
     public RestClient ynabRestClient(RestClient.Builder builder, YnabProperties props) {
         return builder
                 .baseUrl(props.baseUrl())
-                .defaultHeader("Authorization", "Bearer " + props.token())
                 .build();
     }
 

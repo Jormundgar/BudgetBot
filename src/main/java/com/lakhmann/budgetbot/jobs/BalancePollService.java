@@ -3,8 +3,9 @@ package com.lakhmann.budgetbot.jobs;
 import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.balance.state.BalanceState;
 import com.lakhmann.budgetbot.balance.state.BalanceStateStore;
-import com.lakhmann.budgetbot.telegram.TelegramNotificationService;
+import com.lakhmann.budgetbot.telegram.TelegramClient;
 
+import com.lakhmann.budgetbot.user.UserYnabConnectionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,28 +21,34 @@ public class BalancePollService {
 
     private final BalanceStateStore stateStore;
     private final BalanceService balanceService;
-    private final TelegramNotificationService notificationService;
+    private final TelegramClient telegramClient;
     private final Clock clock;
+    private final UserYnabConnectionStore connectionStore;
 
     public BalancePollService(BalanceStateStore stateStore,
                               BalanceService balanceService,
-                              TelegramNotificationService notificationService,
-                              Clock clock) {
+                              TelegramClient telegramClient,
+                              Clock clock,
+                              UserYnabConnectionStore connectionStore) {
         this.stateStore = stateStore;
         this.balanceService = balanceService;
-        this.notificationService = notificationService;
+        this.telegramClient = telegramClient;
         this.clock = clock;
+        this.connectionStore = connectionStore;
     }
 
     public void checkAndNotifyIfChanged() {
-        BalanceState prev = loadPreviousState();
+        connectionStore.listConnectedUserIds().forEach(this::processUser);
+    }
+
+    private void processUser(long userId) {
+        BalanceState prev = stateStore.load(userId).orElse(null);
         Long lastSk = prev == null ? null : prev.lastServerKnowledge();
 
-        var cur = balanceService.getBalanceWithKnowledge(lastSk);
+        var cur = balanceService.getBalanceWithKnowledge(userId, lastSk);
         Long serverKnowledge = cur.serverKnowledge();
 
         if (isServerKnowledgeUnchanged(prev, serverKnowledge)) {
-            log.info("No change: server_knowledge={}", serverKnowledge);
             return;
         }
 
@@ -49,22 +56,13 @@ public class BalancePollService {
         Long oldMilli = prev == null ? null : prev.lastValueMilli();
 
         if (oldMilli != null && oldMilli.equals(newMilli)) {
-            saveState(oldMilli, serverKnowledge);
-            log.info("Value same (milli={}): state updated only", newMilli);
+            saveState(userId, oldMilli, serverKnowledge);
             return;
         }
 
-        String text = balanceService.formatAvailableBalance(newMilli);
-
-        List<Long> recipients = notificationService.notifyAllRecipients(text);
-
-        saveState(newMilli, serverKnowledge);
-        log.info("Notified. oldMilli={}, newMilli={}, server_knowledge={}, recipients={}",
-                oldMilli, newMilli, serverKnowledge, recipients.size());
-    }
-
-    private BalanceState loadPreviousState() {
-        return stateStore.load().orElse(null);
+        telegramClient.sendPlainMessage(userId, balanceService.formatAvailableBalance(newMilli));
+        saveState(userId, newMilli, serverKnowledge);
+        log.info("User {} notified: oldMilli={}, newMilli={}", userId, oldMilli, newMilli);
     }
 
     private boolean isServerKnowledgeUnchanged(BalanceState prev, Long serverKnowledge) {
@@ -74,7 +72,7 @@ public class BalancePollService {
                 && serverKnowledge.equals(prev.lastServerKnowledge());
     }
 
-    private void saveState(Long milli, Long serverKnowledge) {
-        stateStore.save(new BalanceState(milli, serverKnowledge, Instant.now(clock)));
+    private void saveState(long userId, Long milli, Long serverKnowledge) {
+        stateStore.save(userId, new BalanceState(milli, serverKnowledge, Instant.now(clock)));
     }
 }
