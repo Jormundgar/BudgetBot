@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -30,17 +31,37 @@ public class OAuthStateService {
     }
 
     public long verifyAndExtractUserId(String state) {
-        String decoded = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
-        String[] parts = decoded.split(":");
+        String decoded;
+        try {
+            decoded = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("bad state", e);
+        }
+
+        String[] parts = decoded.split(":", 3);
+
         if (parts.length != 3) throw new IllegalArgumentException("bad state");
-
         String payload = parts[0] + ":" + parts[1];
-        if (!sign(payload).equals(parts[2])) throw new IllegalArgumentException("bad signature");
 
-        Instant issuedAt = Instant.ofEpochMilli(Long.parseLong(parts[1]));
+        if (!MessageDigest.isEqual(sign(payload).getBytes(StandardCharsets.UTF_8),
+                parts[2].getBytes(StandardCharsets.UTF_8))) {
+            throw new IllegalArgumentException("bad signature");
+        }
+
+        Instant issuedAt;
+        try {
+            issuedAt = Instant.ofEpochMilli(Long.parseLong(parts[1]));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("bad state", e);
+        }
+
         if (issuedAt.plus(ttl).isBefore(Instant.now())) throw new IllegalArgumentException("state expired");
 
-        return Long.parseLong(parts[0]);
+        try {
+            return Long.parseLong(parts[0]);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("bad state", e);
+        }
     }
 
     private String sign(String value) {
