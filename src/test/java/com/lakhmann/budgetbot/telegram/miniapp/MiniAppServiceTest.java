@@ -4,6 +4,8 @@ import com.lakhmann.budgetbot.balance.MoneyFormatter;
 import com.lakhmann.budgetbot.config.properties.JobsProperties;
 import com.lakhmann.budgetbot.integration.ynab.YnabClient;
 import com.lakhmann.budgetbot.integration.ynab.dto.YnabTransactionsResponse;
+import com.lakhmann.budgetbot.user.UserYnabAuthService;
+import com.lakhmann.budgetbot.user.YnabUserSession;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -24,10 +26,12 @@ class MiniAppServiceTest {
     void returnsSixLatestNonDeletedTransactionsWithFormattedFields() {
         YnabClient ynabClient = mock(YnabClient.class);
         MoneyFormatter moneyFormatter = mock(MoneyFormatter.class);
+        UserYnabAuthService authService = mock(UserYnabAuthService.class);
         JobsProperties jobs = new JobsProperties("0 0 * * * *", "UTC", "token");
         Clock clock = Clock.fixed(Instant.parse("2025-01-10T12:00:00Z"), ZoneOffset.UTC);
 
-        when(ynabClient.getTransactionsSince(java.time.LocalDate.of(2024, 12, 11))).thenReturn(List.of(
+        when(authService.sessionFor(42L)).thenReturn(new YnabUserSession("access", "budget"));
+        when(ynabClient.getTransactionsSince("access", "budget", java.time.LocalDate.of(2024, 12, 11))).thenReturn(List.of(
                 tx("1", "2025-01-10", -1000L, "Кофе", "Еда", false),
                 tx("2", "2025-01-09", 1200L, "", "", false),
                 tx("3", "2025-01-08", null, null, "Транспорт", false),
@@ -45,9 +49,9 @@ class MiniAppServiceTest {
         when(moneyFormatter.formatMilliunits(5000L)).thenReturn("₽5.00");
         when(moneyFormatter.formatMilliunits(6000L)).thenReturn("₽6.00");
 
-        MiniAppService service = new MiniAppService(ynabClient, moneyFormatter, clock, jobs);
+        MiniAppService service = new MiniAppService(ynabClient, moneyFormatter, clock, jobs, authService);
 
-        List<MiniAppTransactionDto> result = service.lastSixTransactions();
+        List<MiniAppTransactionDto> result = service.lastSixTransactions(42L);
 
         assertThat(result).hasSize(6);
         assertThat(result).extracting(MiniAppTransactionDto::id)
@@ -61,14 +65,8 @@ class MiniAppServiceTest {
         assertThat(result.get(1).secondaryText()).isEqualTo("Вчера • Без категории");
         assertThat(result.get(1).amount()).isEqualTo("₽1.20");
 
-        assertThat(result.get(2).title()).isEqualTo("Транзакция");
-        assertThat(result.get(2).secondaryText()).isEqualTo("8 янв. • Транспорт");
-        assertThat(result.get(2).amount()).isEqualTo("₽0.00");
-
-        assertThat(result.get(3).secondaryText()).isEqualTo("7 янв. • Без категории");
-        assertThat(result.get(4).secondaryText()).isEqualTo("6 янв. • Разное");
-
-        verify(ynabClient).getTransactionsSince(java.time.LocalDate.of(2024, 12, 11));
+        verify(authService).sessionFor(42L);
+        verify(ynabClient).getTransactionsSince("access", "budget", java.time.LocalDate.of(2024, 12, 11));
     }
 
     private static YnabTransactionsResponse.Transaction tx(

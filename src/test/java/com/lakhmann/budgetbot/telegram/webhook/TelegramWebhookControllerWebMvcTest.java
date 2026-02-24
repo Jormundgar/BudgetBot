@@ -1,9 +1,7 @@
 package com.lakhmann.budgetbot.telegram.webhook;
 
-import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.config.properties.TelegramProperties;
 import com.lakhmann.budgetbot.telegram.TelegramClient;
-import com.lakhmann.budgetbot.telegram.TelegramMessages;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -13,6 +11,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,9 +26,6 @@ class TelegramWebhookControllerWebMvcTest {
 
     @MockBean
     private TelegramClient telegramClient;
-
-    @MockBean
-    private BalanceService balanceService;
 
     @MockBean
     private TelegramProperties telegramProperties;
@@ -72,18 +68,17 @@ class TelegramWebhookControllerWebMvcTest {
     }
 
     @Test
-    void sendsBalanceOnCommand() throws Exception {
+    void ignoresNonStartCommand() throws Exception {
         when(telegramProperties.webhookSecret()).thenReturn("secret");
-        when(balanceService.currentAvailableBalanceText()).thenReturn("balance");
 
         String payload = """
                 {
                   "message": {
                     "chat": { "id": 42 },
-                    "text": "%s"
+                    "text": "/balance"
                   }
                 }
-                """.formatted(TelegramMessages.BALANCE_COMMAND_TEXT);
+                """;
 
         mockMvc.perform(post("/telegram/webhook")
                         .header("X-Telegram-Bot-Api-Secret-Token", "secret")
@@ -91,6 +86,7 @@ class TelegramWebhookControllerWebMvcTest {
                         .content(payload))
                 .andExpect(status().isOk());
 
-        verify(telegramClient).sendPlainMessage(42L, "balance");
+        verify(recipientsStore, never()).add(42L);
+        verify(telegramClient, never()).ensureBottomKeyboard(42L);
     }
 }

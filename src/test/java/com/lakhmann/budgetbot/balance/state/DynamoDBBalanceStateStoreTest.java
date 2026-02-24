@@ -21,22 +21,12 @@ import static org.mockito.Mockito.*;
 class DynamoDBBalanceStateStoreTest {
 
     @Test
-    void loadThrowsWhenTableMissing() {
-        DynamoDbClient dynamo = mock(DynamoDbClient.class);
-        DynamoDBBalanceStateStore store = new DynamoDBBalanceStateStore(dynamo, " ");
-
-        assertThatThrownBy(store::load)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("DYNAMODB_TABLE");
-    }
-
-    @Test
     void loadReturnsParsedState() {
         DynamoDbClient dynamo = mock(DynamoDbClient.class);
         DynamoDBBalanceStateStore store = new DynamoDBBalanceStateStore(dynamo, "balance");
 
         Map<String, AttributeValue> item = Map.of(
-                "pk", AttributeValue.fromS("BALANCE_STATE"),
+                "userId", AttributeValue.fromN("77"),
                 "lastValueMilli", AttributeValue.fromN("100"),
                 "lastServerKnowledge", AttributeValue.fromN("12"),
                 "updatedAt", AttributeValue.fromS("2024-01-01T00:00:00Z")
@@ -44,7 +34,7 @@ class DynamoDBBalanceStateStoreTest {
         when(dynamo.getItem(any(GetItemRequest.class)))
                 .thenReturn(GetItemResponse.builder().item(item).build());
 
-        Optional<BalanceState> state = store.load();
+        Optional<BalanceState> state = store.load(77L);
 
         assertThat(state).isPresent();
         assertThat(state.get().lastValueMilli()).isEqualTo(100L);
@@ -58,11 +48,12 @@ class DynamoDBBalanceStateStoreTest {
         DynamoDBBalanceStateStore store = new DynamoDBBalanceStateStore(dynamo, "balance");
 
         BalanceState state = new BalanceState(200L, 99L, Instant.parse("2024-01-02T00:00:00Z"));
-        store.save(state);
+        store.save(88L, state);
 
         ArgumentCaptor<PutItemRequest> captor = ArgumentCaptor.forClass(PutItemRequest.class);
         verify(dynamo).putItem(captor.capture());
         Map<String, AttributeValue> item = captor.getValue().item();
+        assertThat(item.get("userId").n()).isEqualTo("88");
         assertThat(item.get("lastValueMilli").n()).isEqualTo("200");
         assertThat(item.get("lastServerKnowledge").n()).isEqualTo("99");
         assertThat(item.get("updatedAt").s()).isEqualTo("2024-01-02T00:00:00Z");
