@@ -17,7 +17,7 @@ public class StartupLog {
     @Bean
     ApplicationRunner logConfig(YnabProperties ynab, TelegramProperties tg, JobsProperties jobs) {
         return args -> {
-            log.info("YNAB baseUrl={}, budgetId={}", ynab.baseUrl(), ynab.budgetId());
+            log.info("YNAB baseUrl={}", ynab.baseUrl());
             log.info("Telegram baseUrl={}, recipientsCount={}", tg.baseUrl(), tg.recipientIds().size());
             log.info("Jobs cron={}, zone={}", jobs.cron(), jobs.zone());
         };

@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -16,27 +17,22 @@ import java.util.Optional;
 @Component
 public class DynamoDBBalanceStateStore implements BalanceStateStore {
 
-    private static final String PK_VALUE = "BALANCE_STATE";
-
     private final DynamoDbClient dynamo;
     private final String table;
 
     public DynamoDBBalanceStateStore(
             DynamoDbClient dynamo,
-            @Value("${DYNAMODB_TABLE:}") String table) {
+            @Value("${DYNAMODB_BALANCE_STATE_TABLE:}") String table) {
         this.dynamo = dynamo;
         this.table = table;
     }
 
     @Override
-    public Optional<BalanceState> load() {
-        if (table == null || table.isBlank()) {
-            throw new IllegalStateException("DYNAMODB_TABLE env is not set");
-        }
+    public Optional<BalanceState> load(long userId) {
 
         var req = GetItemRequest.builder()
                 .tableName(table)
-                .key(Map.of("pk", AttributeValue.fromS(PK_VALUE)))
+                .key(Map.of("userId", AttributeValue.fromN(Long.toString(userId))))
                 .consistentRead(true)
                 .build();
 
@@ -47,32 +43,17 @@ public class DynamoDBBalanceStateStore implements BalanceStateStore {
 
         var item = resp.item();
 
-        Long lastValueMilli = null;
-        if (item.containsKey("lastValueMilli") && item.get("lastValueMilli").n() != null) {
-            lastValueMilli = Long.parseLong(item.get("lastValueMilli").n());
-        }
-
-        Long lastSk = null;
-        if (item.containsKey("lastServerKnowledge") && item.get("lastServerKnowledge").n() != null) {
-            lastSk = Long.parseLong(item.get("lastServerKnowledge").n());
-        }
-
-        Instant updatedAt = Instant.EPOCH;
-        if (item.containsKey("updatedAt") && item.get("updatedAt").s() != null) {
-            updatedAt = Instant.parse(item.get("updatedAt").s());
-        }
+        Long lastValueMilli = item.containsKey("lastValueMilli") ? Long.parseLong(item.get("lastValueMilli").n()) : null;
+        Long lastSk = item.containsKey("lastServerKnowledge") ? Long.parseLong(item.get("lastServerKnowledge").n()) : null;
+        Instant updatedAt = item.containsKey("updatedAt") ? Instant.parse(item.get("updatedAt").s()) : Instant.EPOCH;
 
         return Optional.of(new BalanceState(lastValueMilli, lastSk, updatedAt));
     }
 
     @Override
-    public void save(BalanceState state) {
-        if (table == null || table.isBlank()) {
-            throw new IllegalStateException("DYNAMODB_TABLE env is not set");
-        }
-
-        var item = new java.util.HashMap<String, AttributeValue>();
-        item.put("pk", AttributeValue.fromS(PK_VALUE));
+    public void save(long userId, BalanceState state) {
+        var item = new HashMap<String, AttributeValue>();
+        item.put("userId", AttributeValue.fromN(Long.toString(userId)));
 
         if (state.lastValueMilli() != null) {
             item.put("lastValueMilli", AttributeValue.fromN(state.lastValueMilli().toString()));

@@ -1,7 +1,8 @@
 package com.lakhmann.budgetbot.jobs;
 
 import com.lakhmann.budgetbot.balance.BalanceService;
-import com.lakhmann.budgetbot.telegram.TelegramNotificationService;
+import com.lakhmann.budgetbot.telegram.TelegramClient;
+import com.lakhmann.budgetbot.user.UserYnabConnectionStore;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -9,19 +10,22 @@ import org.springframework.stereotype.Component;
 public class DailyBalanceJob {
 
     private final BalanceService balanceService;
-    private final TelegramNotificationService notificationService;
+    private final UserYnabConnectionStore connectionStore;
+    private final TelegramClient telegramClient;
 
     public DailyBalanceJob(
             BalanceService balanceService,
-            TelegramNotificationService notificationService
+            UserYnabConnectionStore connectionStore,
+            TelegramClient telegramClient
     ) {
         this.balanceService = balanceService;
-        this.notificationService = notificationService;
+        this.connectionStore = connectionStore;
+        this.telegramClient = telegramClient;
     }
 
     @Scheduled(cron = "${jobs.cron}", zone = "${jobs.zone}")
     public void run() {
-        String text = balanceService.currentAvailableBalanceText();
-        notificationService.notifyAllRecipients(text);
+        connectionStore.listConnectedUserIds()
+                .forEach(userId -> telegramClient.sendPlainMessage(userId, balanceService.currentAvailableBalanceText(userId)));
     }
 }
