@@ -1,9 +1,11 @@
 package com.lakhmann.budgetbot.integration.ynab.oauth;
 
 import com.lakhmann.budgetbot.config.properties.YnabProperties;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
 
@@ -14,14 +16,17 @@ public class YnabOAuthService {
     private final YnabProperties props;
 
     public YnabOAuthService(RestClient.Builder builder, YnabProperties props) {
-        this.restClient = builder.baseUrl(props.baseUrl()).build();
+        this.restClient = builder.build();
         this.props = props;
     }
 
     public String buildAuthorizeUrl(String state) {
-        return "%s?client_id=%s&redirect_uri=%s&response_type=code&state=%s".formatted(
-                props.oauthAuthorizeUrl(), props.clientId(), props.redirectUri(), state
-        );
+        return UriComponentsBuilder.fromUriString(props.oauthAuthorizeUrl())
+                .queryParam("client_id", props.clientId())
+                .queryParam("redirect_uri", props.redirectUri())
+                .queryParam("response_type", "code")
+                .queryParam("state", state)
+                .toUriString();
     }
 
     public YnabTokenResponse exchangeCode(String code) {
@@ -49,6 +54,7 @@ public class YnabOAuthService {
 
         return restClient.post()
                 .uri(props.oauthTokenUrl())
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(body)
                 .retrieve()
                 .body(YnabTokenResponse.class);
