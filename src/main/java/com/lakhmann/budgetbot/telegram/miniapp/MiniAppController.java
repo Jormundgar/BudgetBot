@@ -8,6 +8,7 @@ import com.lakhmann.budgetbot.user.UserYnabConnection;
 import com.lakhmann.budgetbot.user.UserYnabConnectionStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +36,9 @@ public class MiniAppController {
     @Value("${telegram.bot-token}")
     private String botToken;
 
+    @Value("${telegram.miniapp-url:}")
+    private String miniappUrl;
+
     public MiniAppController(BalanceService balanceService,
                              RecipientsStore recipientsStore,
                              MiniAppService miniAppService,
@@ -59,13 +63,18 @@ public class MiniAppController {
     }
 
     @GetMapping("/oauth/callback")
-    public Map<String, String> oauthCallback(@RequestParam String code, @RequestParam String state) {
+    public ResponseEntity<?> oauthCallback(@RequestParam String code, @RequestParam String state) {
         long userId = stateService.verifyAndExtractUserId(state);
         var token = oauthService.exchangeCode(code);
         String budgetId = ynabClient.getPrimaryBudgetId(token.accessToken());
 
         connectionStore.save(new UserYnabConnection(userId, token.refreshToken(), budgetId, Instant.now()));
-        return Map.of("status", "connected");
+        if (miniappUrl == null || miniappUrl.isBlank()) {
+            return ResponseEntity.ok(Map.of("status", "connected"));
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", miniappUrl)
+                .build();
     }
 
     @PostMapping("/balance")

@@ -38,7 +38,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 @WebMvcTest(MiniAppController.class)
-@TestPropertySource(properties = "telegram.bot-token=test-bot-token")
+@TestPropertySource(properties = {
+        "telegram.bot-token=test-bot-token",
+        "telegram.miniapp-url=https://mini.app"
+})
 @Tag("slice")
 class MiniAppControllerWebMvcTest {
 
@@ -97,8 +100,9 @@ class MiniAppControllerWebMvcTest {
         mockMvc.perform(get("/api/miniapp/oauth/callback")
                         .param("code", "code123")
                         .param("state", "ok-state"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("connected"));
+                .andExpect(status().isFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Location", "https://mini.app"));
 
         verify(connectionStore).save(any());
     }
