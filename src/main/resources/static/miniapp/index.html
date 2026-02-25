@@ -120,6 +120,7 @@
             transition: transform .08s ease, opacity .12s ease;
         }
         .btn:active { transform: scale(.985); opacity: .92; }
+        .btn + .btn { margin-top: 10px; }
 
         .transactions {
             margin-top: 18px;
@@ -253,8 +254,9 @@
         <div class="amount" id="amount">—</div>
         <div class="updated">Обновлено <span id="updatedAt">—</span></div>
 
+        <button class="btn" id="startBtn">Запустить бота</button>
+        <button class="btn" id="connectBtn">Подключить YNAB</button>
         <button class="btn" id="refreshBtn">Обновить</button>
-        <button class="btn" id="connectBtn" style="margin-top:10px">Подключить YNAB</button>
 
         <div class="hint" id="hint"></div>
     </div>
@@ -275,6 +277,19 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const txListEl = document.getElementById('txList');
     const connectBtn = document.getElementById('connectBtn');
+    const startBtn = document.getElementById('startBtn');
+
+    const buttonState = {
+        START: 'start',
+        CONNECT: 'connect',
+        REFRESH: 'refresh'
+    };
+
+    function setButtons(state) {
+        startBtn.style.display = state === buttonState.START ? 'block' : 'none';
+        connectBtn.style.display = state === buttonState.CONNECT ? 'block' : 'none';
+        refreshBtn.style.display = state === buttonState.REFRESH ? 'block' : 'none';
+    }
 
     function setHint(text) {
         hintEl.textContent = text || "";
@@ -369,10 +384,79 @@
         return json;
     }
 
+    function openBotChat() {
+        if (!tg) return;
+        const botUsername = tg.initDataUnsafe?.receiver?.username;
+        if (botUsername) {
+            tg.openTelegramLink(`https://t.me/${botUsername}`);
+        } else {
+            setHint("Откройте чат с ботом и отправьте /start");
+        }
+    }
+
+    async function sendStartToBot() {
+        if (!tg) return;
+        if (typeof tg.sendData === 'function') {
+            try {
+                tg.sendData('start');
+                setHint("Отправлено /start, обновляем…");
+                return;
+            } catch {
+                setHint("Не удалось отправить /start");
+            }
+        }
+        openBotChat();
+    }
+
+    function refreshAfterStart(attempt = 0) {
+        const maxAttempts = 4;
+        const delayMs = attempt === 0 ? 400 : 700;
+
+        setTimeout(async () => {
+            await callApi('/api/miniapp/balance');
+            if (startBtn.style.display !== 'none') {
+                if (attempt + 1 < maxAttempts) {
+                    refreshAfterStart(attempt + 1);
+                }
+            }
+        }, delayMs);
+    }
+
+    function handleBalanceError(e) {
+        const status = e?.status;
+        const rawMessage = e?.body?.message || e?.body?.error || e?.body?.raw || '';
+        const message = String(rawMessage).toLowerCase();
+
+        if (status === 403 && message.includes('not allowed')) {
+            setButtons(buttonState.START);
+            setHint("Сначала запустите бота командой /start");
+            renderTransactions([]);
+            return;
+        }
+
+        if (status === 403 && message.includes('ynab not connected')) {
+            setButtons(buttonState.CONNECT);
+            setHint("Подключите YNAB");
+            renderTransactions([]);
+            return;
+        }
+
+        if (status === 401) {
+            setButtons(buttonState.START);
+            setHint("Не удалось проверить данные Telegram");
+            renderTransactions([]);
+            return;
+        }
+
+        setHint("Ошибка при загрузке данных");
+        renderTransactions([]);
+    }
+
     async function callApi(endpoint) {
         try {
             if (!tg) {
                 setHint("Открой Mini App внутри Telegram");
+                setButtons(buttonState.START);
                 return;
             }
 
@@ -383,10 +467,7 @@
 
             setHint("Загрузка…");
 
-            const [data, transactions] = await Promise.all([
-                postJson(endpoint, { initData }),
-                getJson('/api/miniapp/transactions', { initData })
-            ]);
+            const data = await postJson(endpoint, { initData });
 
             const fullText = data.balanceText || "";
             const parts = fullText.split(":");
@@ -402,16 +483,24 @@
             labelEl.textContent = label;
             amountEl.textContent = amount;
             updatedAtEl.textContent = formatTimeHHMM(data.updatedAt);
+            setButtons(buttonState.REFRESH);
+
+            const transactions = await getJson('/api/miniapp/transactions', { initData });
             renderTransactions(transactions);
 
             setHint("");
 
         } catch (e) {
-            setHint("Ошибка при загрузке данных");
-            renderTransactions([]);
+            handleBalanceError(e);
         }
     }
 
+    setButtons(buttonState.START);
+
+    startBtn.addEventListener('click', async () => {
+        await sendStartToBot();
+        refreshAfterStart(0);
+    });
     refreshBtn.addEventListener('click', () => callApi('/api/miniapp/refresh'));
     connectBtn.addEventListener('click', async () => {
         if (!tg) return;
