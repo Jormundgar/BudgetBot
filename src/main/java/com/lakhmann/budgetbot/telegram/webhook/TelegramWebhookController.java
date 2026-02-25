@@ -38,14 +38,18 @@ public class TelegramWebhookController {
             return ResponseEntity.status(403).build();
         }
 
-        if (update == null || update.message() == null) {
+        if (update == null || update.message() == null || update.message().chat() == null) {
             return ResponseEntity.ok().build();
         }
 
         long chatId = update.message().chat().id();
         String text = update.message().text();
+        String webAppData = update.message().webAppData() == null ? null : update.message().webAppData().data();
 
-        if ("/start".equals(text)) {
+        boolean isStart = "/start".equals(text)
+                || (webAppData != null && ("/start".equalsIgnoreCase(webAppData) || "start".equalsIgnoreCase(webAppData)));
+
+        if (isStart) {
             recipientsStore.add(chatId);
             telegramClient.ensureBottomKeyboard(chatId);
         }
