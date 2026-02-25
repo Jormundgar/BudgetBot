@@ -121,6 +121,65 @@
         }
         .btn:active { transform: scale(.985); opacity: .92; }
 
+        .btn-secondary {
+            background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+            color: var(--text);
+        }
+
+        .menu {
+            margin-top: 12px;
+        }
+
+        .menu details {
+            position: relative;
+        }
+
+        .menu summary {
+            list-style: none;
+            cursor: pointer;
+        }
+
+        .menu summary::-webkit-details-marker { display: none; }
+
+        .menu-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .menu-caret {
+            font-size: 14px;
+            opacity: .8;
+            transition: transform .18s ease;
+        }
+
+        details[open] .menu-caret {
+            transform: rotate(180deg);
+        }
+
+        .menu-panel {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid var(--rowBorder);
+            background: var(--rowBg);
+            box-shadow: 0 12px 28px rgba(0,0,0,.18);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: menuDrop .18s ease;
+        }
+
+        .menu-panel .btn {
+            border-radius: 14px;
+        }
+
+        @keyframes menuDrop {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .transactions {
             margin-top: 18px;
             padding: 0 2px;
@@ -253,8 +312,20 @@
         <div class="amount" id="amount">—</div>
         <div class="updated">Обновлено <span id="updatedAt">—</span></div>
 
-        <button class="btn" id="refreshBtn">Обновить</button>
-        <button class="btn" id="connectBtn" style="margin-top:10px">Подключить YNAB</button>
+        <div class="menu">
+            <details id="extrasMenu">
+                <summary class="btn btn-secondary">
+                    <span class="menu-title">
+                        <span>Дополнительные возможности</span>
+                        <span class="menu-caret">▾</span>
+                    </span>
+                </summary>
+                <div class="menu-panel">
+                    <button class="btn" id="refreshBtn">Обновить</button>
+                    <button class="btn" id="connectBtn">Подключить YNAB</button>
+                </div>
+            </details>
+        </div>
 
         <div class="hint" id="hint"></div>
     </div>
@@ -275,6 +346,7 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const txListEl = document.getElementById('txList');
     const connectBtn = document.getElementById('connectBtn');
+    const extrasMenu = document.getElementById('extrasMenu');
 
     function setHint(text) {
         hintEl.textContent = text || "";
@@ -412,8 +484,12 @@
         }
     }
 
-    refreshBtn.addEventListener('click', () => callApi('/api/miniapp/refresh'));
+    refreshBtn.addEventListener('click', () => {
+        if (extrasMenu) extrasMenu.open = false;
+        callApi('/api/miniapp/refresh');
+    });
     connectBtn.addEventListener('click', async () => {
+        if (extrasMenu) extrasMenu.open = false;
         if (!tg) return;
         const initData = tg.initData || '';
         try {
