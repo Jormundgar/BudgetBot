@@ -130,7 +130,7 @@ Base configuration lives in `src/main/resources/application.yml`. Critical value
 ## Telegram webhook
 
 ```http
-OST /telegram/webhook
+POST /telegram/webhook
 -Telegram-Bot-Api-Secret-Token: <TELEGRAM_WEBHOOK_SECRET>
 Content-Type: application/json
 ```
