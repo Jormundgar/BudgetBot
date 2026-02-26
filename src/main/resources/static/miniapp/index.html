@@ -252,6 +252,9 @@
             letter-spacing: -0.2px;
         }
 
+        .tx-amount.income { color: #27d07b; }
+        .tx-amount.expense { color: #ff5d5d; }
+
         .tx-empty {
             border-radius: 16px;
             border: 1px dashed var(--rowBorder);
@@ -390,10 +393,13 @@
             const rawTitle = tx?.title || 'Транзакция';
             const rawSecondary = tx?.secondaryText || '';
             const rawAmount = tx?.amount || '0.00';
+            const isIncome = tx?.income === true;
+            const isExpense = tx?.income === false;
 
             const title = escapeHtml(rawTitle);
             const secondary = escapeHtml(rawSecondary);
             const amount = escapeHtml(rawAmount);
+            const amountClass = isIncome ? 'income' : (isExpense ? 'expense' : '');
 
             return `
                 <article class="tx-row">
@@ -405,7 +411,7 @@
                         </div>
                     </div>
                     <div class="tx-right">
-                        <p class="tx-amount">${amount}</p>
+                        <p class="tx-amount ${amountClass}">${amount}</p>
                     </div>
                 </article>
             `;

@@ -70,10 +70,12 @@ public class MiniAppService {
 
         String secondaryText = formatDateLabel(t.date(), today) + " • " + category;
 
-        long amountMilli = (t.amount() == null) ? 0L : Math.abs(t.amount());
+        long rawAmount = (t.amount() == null) ? 0L : t.amount();
+        Boolean income = (rawAmount == 0L) ? null : rawAmount > 0;
+        long amountMilli = Math.abs(rawAmount);
         String amount = moneyFormatter.formatMilliunits(amountMilli);
 
-        return new MiniAppTransactionDto(t.id(), title, secondaryText, amount);
+        return new MiniAppTransactionDto(t.id(), title, secondaryText, amount, income);
     }
 
     private String formatDateLabel(LocalDate date, LocalDate today) {
