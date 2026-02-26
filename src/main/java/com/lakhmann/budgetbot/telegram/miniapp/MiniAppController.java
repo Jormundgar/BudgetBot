@@ -1,8 +1,6 @@
 package com.lakhmann.budgetbot.telegram.miniapp;
 
 import com.lakhmann.budgetbot.balance.BalanceService;
-import com.lakhmann.budgetbot.balance.state.BalanceState;
-import com.lakhmann.budgetbot.balance.state.BalanceStateStore;
 import com.lakhmann.budgetbot.integration.ynab.YnabClient;
 import com.lakhmann.budgetbot.integration.ynab.oauth.YnabOAuthService;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
@@ -22,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/miniapp")
@@ -35,7 +32,6 @@ public class MiniAppController {
     private final YnabOAuthService oauthService;
     private final UserYnabConnectionStore connectionStore;
     private final YnabClient ynabClient;
-    private final BalanceStateStore balanceStateStore;
 
     @Value("${telegram.bot-token}")
     private String botToken;
@@ -49,8 +45,7 @@ public class MiniAppController {
                              OAuthStateService stateService,
                              YnabOAuthService oauthService,
                              UserYnabConnectionStore connectionStore,
-                             YnabClient ynabClient,
-                             BalanceStateStore balanceStateStore) {
+                             YnabClient ynabClient) {
         this.balanceService = balanceService;
         this.recipientsStore = recipientsStore;
         this.miniAppService = miniAppService;
@@ -58,7 +53,6 @@ public class MiniAppController {
         this.oauthService = oauthService;
         this.connectionStore = connectionStore;
         this.ynabClient = ynabClient;
-        this.balanceStateStore = balanceStateStore;
     }
 
     @PostMapping("/oauth/start")
@@ -89,7 +83,6 @@ public class MiniAppController {
         requireAllowed(userId);
 
         var snap = balanceService.getBalanceWithKnowledge(userId, null);
-        updateStateIfChanged(userId, snap.valueMilli(), snap.serverKnowledge());
 
         return new MiniAppBalanceResponse(
                 snap.valueMilli(),
@@ -105,7 +98,6 @@ public class MiniAppController {
         requireAllowed(userId);
 
         var snap = balanceService.forceRefreshSnapshot(userId);
-        updateStateIfChanged(userId, snap.valueMilli(), snap.serverKnowledge());
         return new MiniAppBalanceResponse(
                 snap.valueMilli(),
                 balanceService.formatAvailableBalance(snap.valueMilli()),
@@ -138,13 +130,4 @@ public class MiniAppController {
         }
     }
 
-    private void updateStateIfChanged(long userId, Long valueMilli, Long serverKnowledge) {
-        BalanceState prev = balanceStateStore.load(userId).orElse(null);
-        if (prev != null
-                && Objects.equals(valueMilli, prev.lastValueMilli())
-                && Objects.equals(serverKnowledge, prev.lastServerKnowledge())) {
-            return;
-        }
-        balanceStateStore.save(userId, new BalanceState(valueMilli, serverKnowledge, Instant.now()));
-    }
 }
