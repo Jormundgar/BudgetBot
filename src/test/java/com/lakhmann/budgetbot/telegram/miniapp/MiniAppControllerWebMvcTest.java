@@ -118,7 +118,7 @@ class MiniAppControllerWebMvcTest {
         String initData = signedInitData(userId, Instant.now().getEpochSecond());
         when(recipientsStore.contains(userId)).thenReturn(true);
         when(miniAppService.lastSixTransactions(userId)).thenReturn(List.of(
-                new MiniAppTransactionDto("t1", "Кофе", "Сегодня • Еда", "₽1.00")
+                new MiniAppTransactionDto("t1", "Кофе", "Сегодня • Еда", "₽1.00", false)
         ));
 
         mockMvc.perform(post("/api/miniapp/transactions")
