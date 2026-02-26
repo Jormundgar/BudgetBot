@@ -48,16 +48,23 @@ public class BalancePollService {
         var cur = balanceService.getBalanceWithKnowledge(userId, lastSk);
         Long serverKnowledge = cur.serverKnowledge();
 
-        if (isServerKnowledgeUnchanged(prev, serverKnowledge)) {
-            return;
-        }
-
         Long newMilli = cur.valueMilli();
         Long oldMilli = prev == null ? null : prev.lastValueMilli();
+
+        if (isServerKnowledgeUnchanged(prev, serverKnowledge)
+                && oldMilli != null
+                && oldMilli.equals(newMilli)) {
+            return;
+        }
 
         if (oldMilli != null && oldMilli.equals(newMilli)) {
             saveState(userId, oldMilli, serverKnowledge);
             return;
+        }
+
+        if (isServerKnowledgeUnchanged(prev, serverKnowledge)) {
+            log.warn("Server knowledge unchanged but balance changed for user {}: oldMilli={}, newMilli={}",
+                    userId, oldMilli, newMilli);
         }
 
         telegramClient.sendPlainMessage(userId, balanceService.formatAvailableBalance(newMilli));

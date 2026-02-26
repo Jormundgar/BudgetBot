@@ -39,12 +39,12 @@ class BalancePollServiceTest {
             new BalancePollService(stateStore, balanceService, telegramClient, clock, connectionStore);
 
     @Test
-    void skipsWhenServerKnowledgeUnchanged() {
+    void skipsWhenServerKnowledgeUnchangedAndValueSame() {
         long userId = 101L;
         BalanceState prev = new BalanceState(100L, 10L, Instant.now(clock));
         when(connectionStore.listConnectedUserIds()).thenReturn(List.of(userId));
         when(stateStore.load(userId)).thenReturn(Optional.of(prev));
-        when(balanceService.getBalanceWithKnowledge(userId, 10L)).thenReturn(new BalanceSnapshot(200L, 10L));
+        when(balanceService.getBalanceWithKnowledge(userId, 10L)).thenReturn(new BalanceSnapshot(100L, 10L));
 
         service.checkAndNotifyIfChanged();
 
@@ -76,6 +76,21 @@ class BalancePollServiceTest {
         when(connectionStore.listConnectedUserIds()).thenReturn(List.of(userId));
         when(stateStore.load(userId)).thenReturn(Optional.of(prev));
         when(balanceService.getBalanceWithKnowledge(userId, 10L)).thenReturn(new BalanceSnapshot(200L, 11L));
+        when(balanceService.formatAvailableBalance(200L)).thenReturn("Доступный баланс: ₽2.00");
+
+        service.checkAndNotifyIfChanged();
+
+        verify(telegramClient).sendPlainMessage(userId, "Доступный баланс: ₽2.00");
+        verify(stateStore).save(eq(userId), any(BalanceState.class));
+    }
+
+    @Test
+    void notifiesWhenValueChangesEvenIfKnowledgeUnchanged() {
+        long userId = 104L;
+        BalanceState prev = new BalanceState(100L, 10L, Instant.now(clock));
+        when(connectionStore.listConnectedUserIds()).thenReturn(List.of(userId));
+        when(stateStore.load(userId)).thenReturn(Optional.of(prev));
+        when(balanceService.getBalanceWithKnowledge(userId, 10L)).thenReturn(new BalanceSnapshot(200L, 10L));
         when(balanceService.formatAvailableBalance(200L)).thenReturn("Доступный баланс: ₽2.00");
 
         service.checkAndNotifyIfChanged();

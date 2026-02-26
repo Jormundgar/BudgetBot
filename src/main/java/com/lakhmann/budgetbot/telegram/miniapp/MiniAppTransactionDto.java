@@ -4,5 +4,6 @@ public record MiniAppTransactionDto(
         String id,
         String title,
         String secondaryText,
-        String amount
+        String amount,
+        Boolean income
 ) {}
