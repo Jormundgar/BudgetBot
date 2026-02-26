@@ -3,6 +3,7 @@ package com.lakhmann.budgetbot.telegram.miniapp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.balance.BalanceSnapshot;
+import com.lakhmann.budgetbot.balance.state.BalanceStateStore;
 import com.lakhmann.budgetbot.integration.ynab.YnabClient;
 import com.lakhmann.budgetbot.integration.ynab.oauth.YnabOAuthService;
 import com.lakhmann.budgetbot.integration.ynab.oauth.YnabTokenResponse;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -73,6 +75,9 @@ class MiniAppControllerWebMvcTest {
 
     @MockBean
     private YnabClient ynabClient;
+
+    @MockBean
+    private BalanceStateStore balanceStateStore;
 
 
     @Test
@@ -147,6 +152,7 @@ class MiniAppControllerWebMvcTest {
         when(balanceService.forceRefreshSnapshot(anyLong())).thenReturn(new BalanceSnapshot(5000L, 99L));
         when(balanceService.formatAvailableBalance(5000L)).thenReturn("Доступный баланс: ₽5.000");
         when(recipientsStore.contains(anyLong())).thenReturn(true);
+        when(balanceStateStore.load(anyLong())).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/miniapp/refresh")
                         .contentType(MediaType.APPLICATION_JSON)

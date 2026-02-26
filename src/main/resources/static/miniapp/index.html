@@ -144,18 +144,10 @@
         .menu-title {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
             gap: 10px;
-        }
-
-        .menu-caret {
-            font-size: 14px;
-            opacity: .8;
-            transition: transform .18s ease;
-        }
-
-        details[open] .menu-caret {
-            transform: rotate(180deg);
+            text-align: center;
+            width: 100%;
         }
 
         .menu-panel {
@@ -300,6 +292,11 @@
                     linear-gradient(180deg, rgba(0,0,0,.00), rgba(0,0,0,0));
             opacity: .9;
         }
+
+        body.light .btn-secondary {
+            background: linear-gradient(135deg, rgba(16,17,20,.14), rgba(16,17,20,.06));
+            border-color: rgba(0,0,0,.12);
+        }
     </style>
 </head>
 
@@ -315,10 +312,7 @@
         <div class="menu">
             <details id="extrasMenu">
                 <summary class="btn btn-secondary">
-                    <span class="menu-title">
-                        <span>Дополнительные возможности</span>
-                        <span class="menu-caret">▾</span>
-                    </span>
+                    <span class="menu-title">Дополнительно</span>
                 </summary>
                 <div class="menu-panel">
                     <button class="btn" id="refreshBtn">Обновить</button>
