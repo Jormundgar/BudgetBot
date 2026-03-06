@@ -1,2 +1,4 @@
 org.springframework.boot.env.EnvironmentPostProcessor=\
 com.lakhmann.budgetbot.config.SecretsManagerEnvironmentPostProcessor
+org.springframework.context.ApplicationContextInitializer=\
+com.lakhmann.budgetbot.config.SecretsManagerApplicationContextInitializer
