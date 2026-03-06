@@ -5,39 +5,42 @@ import com.lakhmann.budgetbot.telegram.TelegramClient;
 import com.lakhmann.budgetbot.telegram.recipients.RecipientsStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(TelegramWebhookController.class)
-@Tag("slice")
+@Tag("unit")
 class TelegramWebhookControllerWebMvcTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private TelegramClient telegramClient;
-
-    @MockBean
-    private TelegramProperties telegramProperties;
-
-    @MockBean
-    private RecipientsStore recipientsStore;
+    private MockMvc mockMvc(TelegramClient telegramClient,
+                            TelegramProperties telegramProperties,
+                            RecipientsStore recipientsStore) {
+        return MockMvcBuilders.standaloneSetup(
+                new TelegramWebhookController(telegramClient, telegramProperties, recipientsStore)
+        ).setMessageConverters(new MappingJackson2HttpMessageConverter()).build();
+    }
 
     @Test
     void rejectsWhenSecretInvalid() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
+        TelegramClient telegramClient = mock(TelegramClient.class);
+        TelegramProperties telegramProperties = new TelegramProperties(
+                "https://api.telegram.org",
+                "bot-token",
+                "",
+                "secret",
+                "https://mini.app"
+        );
+        RecipientsStore recipientsStore = mock(RecipientsStore.class);
 
-        mockMvc.perform(post("/telegram/webhook")
+        mockMvc(telegramClient, telegramProperties, recipientsStore)
+                .perform(post("/telegram/webhook")
                         .header("X-Telegram-Bot-Api-Secret-Token", "wrong")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -46,7 +49,15 @@ class TelegramWebhookControllerWebMvcTest {
 
     @Test
     void handlesStartCommand() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
+        TelegramClient telegramClient = mock(TelegramClient.class);
+        TelegramProperties telegramProperties = new TelegramProperties(
+                "https://api.telegram.org",
+                "bot-token",
+                "",
+                "secret",
+                "https://mini.app"
+        );
+        RecipientsStore recipientsStore = mock(RecipientsStore.class);
 
         String payload = """
                 {
@@ -57,7 +68,8 @@ class TelegramWebhookControllerWebMvcTest {
                 }
                 """;
 
-        mockMvc.perform(post("/telegram/webhook")
+        mockMvc(telegramClient, telegramProperties, recipientsStore)
+                .perform(post("/telegram/webhook")
                         .header("X-Telegram-Bot-Api-Secret-Token", "secret")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
@@ -69,7 +81,15 @@ class TelegramWebhookControllerWebMvcTest {
 
     @Test
     void ignoresNonStartCommand() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
+        TelegramClient telegramClient = mock(TelegramClient.class);
+        TelegramProperties telegramProperties = new TelegramProperties(
+                "https://api.telegram.org",
+                "bot-token",
+                "",
+                "secret",
+                "https://mini.app"
+        );
+        RecipientsStore recipientsStore = mock(RecipientsStore.class);
 
         String payload = """
                 {
@@ -80,7 +100,8 @@ class TelegramWebhookControllerWebMvcTest {
                 }
                 """;
 
-        mockMvc.perform(post("/telegram/webhook")
+        mockMvc(telegramClient, telegramProperties, recipientsStore)
+                .perform(post("/telegram/webhook")
                         .header("X-Telegram-Bot-Api-Secret-Token", "secret")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))

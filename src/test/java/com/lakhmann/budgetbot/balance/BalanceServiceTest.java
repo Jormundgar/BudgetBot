@@ -23,10 +23,9 @@ class BalanceServiceTest {
     void returnsSnapshotFromYnabResponse() {
         YnabClient ynabClient = mock(YnabClient.class);
         MoneyFormatter moneyFormatter = mock(MoneyFormatter.class);
-        JobsProperties jobs = mock(JobsProperties.class);
+        JobsProperties jobs = new JobsProperties("0 0 7 * * *", "UTC", "job-token");
         UserYnabAuthService authService = mock(UserYnabAuthService.class);
 
-        when(jobs.zone()).thenReturn("UTC");
         when(authService.sessionFor(1001L))
                 .thenReturn(new YnabUserSession("access-token", "budget-id"));
 
@@ -53,7 +52,7 @@ class BalanceServiceTest {
     void formatsAvailableBalanceWithPrefix() {
         YnabClient ynabClient = mock(YnabClient.class);
         MoneyFormatter moneyFormatter = mock(MoneyFormatter.class);
-        JobsProperties jobs = mock(JobsProperties.class);
+        JobsProperties jobs = new JobsProperties("0 0 7 * * *", "UTC", "job-token");
         UserYnabAuthService authService = mock(UserYnabAuthService.class);
 
         when(moneyFormatter.formatMilliunits(1000L)).thenReturn("₽1.00");
