@@ -1,5 +1,6 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 management:
   endpoints:
@@ -30,6 +31,7 @@ jobs:
   cron: "0 0 7 * * *"
   zone: "Asia/Jerusalem"
   job-token: ${BUDGETBOT_JOB_TOKEN:}
+  internal-schedule-enabled: true
 
 currency:
   symbol: "₪"

@@ -1,4 +1,4 @@
-name: Build & Deploy to ECS
+name: Build & Deploy to Lambda
 
 on:
   push:
@@ -13,10 +13,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
-  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
-  ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+  LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
 
 jobs:
   test:
@@ -116,51 +113,8 @@ jobs:
         run: |
           docker push "${{ steps.meta.outputs.image }}"
 
-      - name: Fetch baseline task definition from ECS
+      - name: Update Lambda function image
         run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ vars.ECS_TASK_BASELINE }}" \
-            --query taskDefinition \
-            --output json > taskdef.current.json
-
-      - name: Clean task definition (remove readonly fields)
-        run: |
-          jq 'del(
-            .taskDefinitionArn,
-            .revision,
-            .status,
-            .requiresAttributes,
-            .compatibilities,
-            .registeredAt,
-            .registeredBy
-          )' taskdef.current.json > taskdef.clean.json
-
-      - name: Patch image in task definition (only image)
-        run: |
-          jq \
-            --arg IMG "${{ steps.meta.outputs.image }}" \
-            '(.containerDefinitions[] | select(.name=="'"$ECS_CONTAINER_NAME"'") | .image)=$IMG' \
-            taskdef.clean.json > taskdef.patched.json
-
-      - name: Register new task definition revision
-        id: taskdef
-        run: |
-          ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://taskdef.patched.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "arn=$ARN" >> $GITHUB_OUTPUT
-
-      - name: Update ECS service
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "${{ steps.taskdef.outputs.arn }}" \
-            --force-new-deployment
-
-      - name: Wait for service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE"
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --image-uri "${{ steps.meta.outputs.image }}"

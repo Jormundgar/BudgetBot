@@ -14,16 +14,37 @@ public class JobsController {
 
     private final JobsProperties jobs;
     private final BalancePollService balancePollService;
+    private final DailyBalanceJob dailyBalanceJob;
 
-    public JobsController(JobsProperties jobs, BalancePollService balancePollService) {
+    public JobsController(JobsProperties jobs, BalancePollService balancePollService, DailyBalanceJob dailyBalanceJob) {
         this.jobs = jobs;
         this.balancePollService = balancePollService;
+        this.dailyBalanceJob = dailyBalanceJob;
     }
 
     @PostMapping("/poll")
     public ResponseEntity<Void> poll(
             @RequestHeader(name = "X-Budgetbot-Job-Token", required = false) String token
     ) {
+        var auth = authorize(token);
+        if (auth != null) return auth;
+
+        balancePollService.checkAndNotifyIfChanged();
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/daily")
+    public ResponseEntity<Void> daily(
+            @RequestHeader(name = "X-Budgetbot-Job-Token", required = false) String token
+    ) {
+        var auth = authorize(token);
+        if (auth != null) return auth;
+
+        dailyBalanceJob.run();
+        return ResponseEntity.ok().build();
+    }
+
+    private ResponseEntity<Void> authorize(String token) {
         String expected = jobs.jobToken();
 
         if (expected == null || expected.isBlank()) {
@@ -35,7 +56,6 @@ public class JobsController {
             return ResponseEntity.status(403).build();
         }
 
-        balancePollService.checkAndNotifyIfChanged();
-        return ResponseEntity.ok().build();
+        return null;
     }
 }

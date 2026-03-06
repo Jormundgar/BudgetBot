@@ -3,10 +3,12 @@ package com.lakhmann.budgetbot.jobs;
 import com.lakhmann.budgetbot.balance.BalanceService;
 import com.lakhmann.budgetbot.telegram.TelegramClient;
 import com.lakhmann.budgetbot.user.UserYnabConnectionStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "jobs.internal-schedule-enabled", havingValue = "true", matchIfMissing = true)
 public class DailyBalanceJob {
 
     private final BalanceService balanceService;
