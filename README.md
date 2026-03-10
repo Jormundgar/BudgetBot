@@ -1,13 +1,13 @@
 # BudgetBot
 
-BudgetBot is a Spring Boot service that connects a Telegram bot + Telegram Mini App with the YNAB API so users can see their current **To Be Budgeted** amount and recent transactions directly inside Telegram.
+BudgetBot is a Spring Boot service deployed serverless on AWS. It connects a Telegram bot + Telegram Mini App with the YNAB API so users can see their current **To Be Budgeted** amount and recent transactions directly inside Telegram.
 
 The project supports:
 - user registration through the Telegram bot (`/start`);
 - per-user YNAB OAuth 2.0 authorization;
 - personal balance and transactions requests from the Mini App;
-- daily scheduled balance messages;
-- a protected polling job endpoint that notifies only when balance changes;
+- daily scheduled balance messages (EventBridge Scheduler);
+- a protected polling endpoint that notifies only when balance changes;
 - state storage in memory (`dev`) or DynamoDB (`!dev`), with refresh token encryption via AWS KMS.
 
 ---
@@ -21,6 +21,9 @@ The project supports:
 - [API Endpoints](#api-endpoints)
 - [Run Locally](#run-locally)
 - [Build and Run with Docker](#build-and-run-with-docker)
+- [Serverless Deployment (SAM)](#serverless-deployment-sam)
+- [Custom Domain (API Gateway + Route53)](#custom-domain-api-gateway--route53)
+- [CI/CD (GitHub Actions)](#cicd-github-actions)
 - [Testing and Quality](#testing-and-quality)
 
 ---
@@ -30,7 +33,14 @@ The project supports:
 - **Java 17**
 - **Spring Boot 3.2** (Web, Actuator, Scheduling, Test)
 - **Maven Wrapper** (`./mvnw`)
-- **AWS SDK v2** (DynamoDB, KMS)
+- **AWS SDK v2** (Java: DynamoDB, KMS)
+- **AWS SDK v3** (Node.js: Secrets Manager)
+- **AWS SAM** (CloudFormation)
+- **AWS Lambda** (Java 17, Node.js 20)
+- **API Gateway (HTTP API)**
+- **EventBridge Scheduler**
+- **Secrets Manager**
+- **DynamoDB**
 - **Telegram Bot API**
 - **YNAB API + OAuth 2.0**
 
@@ -45,8 +55,8 @@ The project supports:
 - view current balance;
 - force refresh balance;
 - view recent transactions.
-5. A scheduled daily job sends the current balance.
-6. A separate protected polling endpoint can be triggered externally and sends a message only when balance changes.
+5. EventBridge Scheduler triggers a poll job every minute and a daily job once per day.
+6. The poll job calls `/jobs/poll` and the daily job calls `/jobs/daily`.
 
 ---
 
@@ -72,8 +82,9 @@ The project supports:
 
 ### Scheduler and polling
 - `DailyBalanceJob` — sends daily balance to all connected users.
-- `JobsController` (`POST /jobs/poll`) — manual/external trigger for change detection.
+- `JobsController` (`POST /jobs/poll`, `POST /jobs/daily`) — internal endpoints used by schedulers.
 - `BalancePollService` — uses `server_knowledge` and last value state to avoid duplicate notifications.
+- `infra/scheduler` — Node.js Lambda functions that call the jobs endpoints.
 
 ### Data infrastructure
 - `RecipientsStore` — allowed Telegram users.
@@ -99,20 +110,27 @@ Default Spring profile is `dev`.
 ---
 # Configuration
 Base configuration lives in `src/main/resources/application.yml`. Critical values should be provided via environment variables.
-### Required environment variables (production-like setup)
-| Variable | Purpose |
-|---|---|
- `TELEGRAM_BOT_TOKEN` | Telegram bot token |
-| `TELEGRAM_WEBHOOK_SECRET` | Secret for `X-Telegram-Bot-Api-Secret-Token` webhook header |
-| `TELEGRAM_MINIAPP_URL` | Public Mini App URL |
-| `YNAB_CLIENT_ID` | YNAB OAuth client ID |
-| `YNAB_CLIENT_SECRET` | YNAB OAuth client secret |
-| `YNAB_REDIRECT_URI` | OAuth callback redirect URI |
-| `BUDGETBOT_JOB_TOKEN` | Token for `POST /jobs/poll` |
-| `DYNAMODB_RECIPIENTS_TABLE` | Recipients table |
-| `DYNAMODB_BALANCE_STATE_TABLE` | Balance state table |
-| `DYNAMODB_YNAB_CONNECTIONS_TABLE` | User↔YNAB connections table |
-| `KMS_KEY_ID` | KMS key id/arn for refresh token encryption |
+### Required secrets (production-like setup)
+In serverless deployment, secrets are stored in **AWS Secrets Manager** as a JSON object.  
+The Lambda reads `BUDGETBOT_SECRET_ARN` and loads the following keys:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_MINIAPP_URL`
+- `YNAB_CLIENT_ID`
+- `YNAB_CLIENT_SECRET`
+- `YNAB_REDIRECT_URI`
+- `BUDGETBOT_JOB_TOKEN`
+- `KMS_KEY_ID`
+
+### Required environment variables (local/dev)
+For local run, set these as environment variables:
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_MINIAPP_URL`
+- `YNAB_CLIENT_ID`
+- `YNAB_CLIENT_SECRET`
+- `YNAB_REDIRECT_URI`
+- `BUDGETBOT_JOB_TOKEN`
 
 ### Important `application.yml` keys
 
@@ -151,6 +169,7 @@ GET  /api/miniapp/oauth/callback?code=...&state=...
 
 ```http
 POST /jobs/poll
+POST /jobs/daily
 X-Budgetbot-Job-Token: <BUDGETBOT_JOB_TOKEN>
 ```
 ---
@@ -181,7 +200,7 @@ App will be available at `http://localhost:8080`.
 ---
 # Build and Run with Docker
 ```bash
-ocker build -t budgetbot .
+docker build -t budgetbot .
 
 docker run --rm -p 8080:8080 \
   -e TELEGRAM_MINIAPP_URL=... \
@@ -193,6 +212,68 @@ docker run --rm -p 8080:8080 \
 ```
 
 For non-`dev`, also pass AWS/DynamoDB/KMS settings and activate the target Spring profile.
+
+---
+
+## Serverless Deployment (SAM)
+
+Prerequisites:
+- AWS credentials with permissions for API Gateway, Lambda, EventBridge Scheduler, DynamoDB, KMS, Secrets Manager.
+- AWS SAM CLI installed.
+
+Build:
+```bash
+sam build
+```
+
+Deploy:
+```bash
+sam deploy --guided
+```
+
+Required parameters:
+- `BudgetbotSecretArn`
+- `BudgetbotKmsKeyArn`
+- `LegacyKmsKeyArn` (for decrypting existing tokens)
+- `DynamoRecipientsTable`
+- `DynamoBalanceStateTable`
+- `DynamoYnabConnectionsTable`
+- `SpringProfile`
+- `DailySchedule`
+- `DailyScheduleTimezone`
+
+The SAM build produces `.aws-sam/` which should not be committed.
+
+---
+
+## Custom Domain (API Gateway + Route53)
+
+1) Create a custom domain in API Gateway (regional).
+2) Create API mapping to `$default` stage.
+3) Create Route53 A‑record alias to the API Gateway domain.
+4) Update YNAB redirect URI to:
+`https://budgetbot.liorlakhmann.com/api/miniapp/oauth/callback`
+
+---
+
+## CI/CD (GitHub Actions)
+
+Workflow uses SAM deploy (no ECS/ECR).  
+Required GitHub Secrets:
+- `AWS_ROLE_ARN`
+- `BUDGETBOT_SECRET_ARN`
+
+Required GitHub Variables:
+- `AWS_REGION`
+- `SAM_STACK_NAME`
+- `BUDGETBOT_KMS_KEY_ARN`
+- `LEGACY_KMS_KEY_ARN`
+- `DYNAMODB_RECIPIENTS_TABLE`
+- `DYNAMODB_BALANCE_STATE_TABLE`
+- `DYNAMODB_YNAB_CONNECTIONS_TABLE`
+- `SPRING_PROFILE`
+- `DAILY_SCHEDULE`
+- `DAILY_SCHEDULE_TIMEZONE`
 
 ---
 
@@ -210,7 +291,7 @@ Additionally configured in the project:
 Full verification:
 
 ```bash
-./mvnw verify
+./mvnw clean verify pitest:mutationCoverage
 ```
 
 ---
