@@ -1,71 +1,58 @@
 package com.lakhmann.budgetbot.telegram;
 
-import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.HttpMethod;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
-import java.net.http.HttpClient;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 @Tag("integration")
 class TelegramClientIT {
 
-    private WireMockServer wireMockServer;
+    private MockRestServiceServer server;
+    private RestClient restClient;
 
     @BeforeEach
     void setUp() {
-        wireMockServer = new WireMockServer(0);
-        wireMockServer.start();
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl("http://localhost");
+        server = MockRestServiceServer.bindTo(builder).build();
+        restClient = builder.build();
     }
 
     @AfterEach
     void tearDown() {
-        wireMockServer.stop();
+        server.verify();
     }
 
     @Test
     void sendsBottomKeyboard() {
-        wireMockServer.stubFor(post(urlEqualTo("/sendMessage"))
-                .willReturn(ok()));
-
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-        RestClient restClient = RestClient.builder()
-                .baseUrl("http://localhost:" + wireMockServer.port())
-                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
-                .build();
+        server.expect(requestTo("http://localhost/sendMessage"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.chat_id").value(55))
+                .andExpect(jsonPath("$.text").value(TelegramMessages.READY_MESSAGE_TEXT))
+                .andRespond(withSuccess());
         TelegramClient client = new TelegramClient(restClient);
 
         client.ensureBottomKeyboard(55L);
-
-        wireMockServer.verify(postRequestedFor(urlEqualTo("/sendMessage"))
-                .withRequestBody(matchingJsonPath("$.chat_id", equalTo("55")))
-                .withRequestBody(matchingJsonPath("$.text", equalTo(TelegramMessages.READY_MESSAGE_TEXT))));
     }
 
     @Test
     void sendsPlainMessage() {
-        wireMockServer.stubFor(post(urlEqualTo("/sendMessage"))
-                .willReturn(ok()));
-
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-        RestClient restClient = RestClient.builder()
-                .baseUrl("http://localhost:" + wireMockServer.port())
-                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
-                .build();
+        server.expect(requestTo("http://localhost/sendMessage"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.chat_id").value(11))
+                .andExpect(jsonPath("$.text").value("hi"))
+                .andRespond(withSuccess());
         TelegramClient client = new TelegramClient(restClient);
 
         client.sendPlainMessage(11L, "hi");
-
-        wireMockServer.verify(postRequestedFor(urlEqualTo("/sendMessage"))
-                .withRequestBody(matchingJsonPath("$.chat_id", equalTo("11")))
-                .withRequestBody(matchingJsonPath("$.text", equalTo("hi"))));
     }
 }

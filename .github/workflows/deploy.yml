@@ -1,4 +1,4 @@
-name: Build & Deploy to ECS
+name: Build & Deploy (SAM)
 
 on:
   push:
@@ -11,12 +11,16 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
-  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
-  ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+  SAM_STACK_NAME: ${{ vars.SAM_STACK_NAME }}
+  BUDGETBOT_SECRET_ARN: ${{ secrets.BUDGETBOT_SECRET_ARN }}
+  BUDGETBOT_KMS_KEY_ARN: ${{ vars.BUDGETBOT_KMS_KEY_ARN }}
+  LEGACY_KMS_KEY_ARN: ${{ vars.LEGACY_KMS_KEY_ARN }}
+  DYNAMODB_RECIPIENTS_TABLE: ${{ vars.DYNAMODB_RECIPIENTS_TABLE }}
+  DYNAMODB_BALANCE_STATE_TABLE: ${{ vars.DYNAMODB_BALANCE_STATE_TABLE }}
+  DYNAMODB_YNAB_CONNECTIONS_TABLE: ${{ vars.DYNAMODB_YNAB_CONNECTIONS_TABLE }}
+  SPRING_PROFILE: ${{ vars.SPRING_PROFILE }}
+  DAILY_SCHEDULE: ${{ vars.DAILY_SCHEDULE }}
+  DAILY_SCHEDULE_TIMEZONE: ${{ vars.DAILY_SCHEDULE_TIMEZONE }}
 
 jobs:
   test:
@@ -92,75 +96,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: infra/scheduler/package-lock.json
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Compute image tag
-        id: meta
+      - name: Install AWS SAM CLI
         run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
-          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${SHORT_SHA}"
-          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          python -m pip install --upgrade pip
+          pip install aws-sam-cli
 
-      - name: Build Docker image
+      - name: SAM build
         run: |
-          docker build -t "${{ steps.meta.outputs.image }}" .
+          sam build
 
-      - name: Push Docker image
+      - name: SAM deploy
         run: |
-          docker push "${{ steps.meta.outputs.image }}"
-
-      - name: Fetch baseline task definition from ECS
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ vars.ECS_TASK_BASELINE }}" \
-            --query taskDefinition \
-            --output json > taskdef.current.json
-
-      - name: Clean task definition (remove readonly fields)
-        run: |
-          jq 'del(
-            .taskDefinitionArn,
-            .revision,
-            .status,
-            .requiresAttributes,
-            .compatibilities,
-            .registeredAt,
-            .registeredBy
-          )' taskdef.current.json > taskdef.clean.json
-
-      - name: Patch image in task definition (only image)
-        run: |
-          jq \
-            --arg IMG "${{ steps.meta.outputs.image }}" \
-            '(.containerDefinitions[] | select(.name=="'"$ECS_CONTAINER_NAME"'") | .image)=$IMG' \
-            taskdef.clean.json > taskdef.patched.json
-
-      - name: Register new task definition revision
-        id: taskdef
-        run: |
-          ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://taskdef.patched.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "arn=$ARN" >> $GITHUB_OUTPUT
-
-      - name: Update ECS service
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "${{ steps.taskdef.outputs.arn }}" \
-            --force-new-deployment
-
-      - name: Wait for service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE"
+          sam deploy \
+            --stack-name "$SAM_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3 \
+            --parameter-overrides \
+              BudgetbotSecretArn="$BUDGETBOT_SECRET_ARN" \
+              BudgetbotKmsKeyArn="$BUDGETBOT_KMS_KEY_ARN" \
+              LegacyKmsKeyArn="$LEGACY_KMS_KEY_ARN" \
+              DynamoRecipientsTable="$DYNAMODB_RECIPIENTS_TABLE" \
+              DynamoBalanceStateTable="$DYNAMODB_BALANCE_STATE_TABLE" \
+              DynamoYnabConnectionsTable="$DYNAMODB_YNAB_CONNECTIONS_TABLE" \
+              SpringProfile="$SPRING_PROFILE" \
+              DailySchedule="$DAILY_SCHEDULE" \
+              DailyScheduleTimezone="$DAILY_SCHEDULE_TIMEZONE"

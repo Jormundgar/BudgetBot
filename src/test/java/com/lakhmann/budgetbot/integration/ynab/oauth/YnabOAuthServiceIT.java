@@ -1,49 +1,56 @@
 package com.lakhmann.budgetbot.integration.ynab.oauth;
 
-import com.github.tomakehurst.wiremock.WireMockServer;
 import com.lakhmann.budgetbot.config.properties.YnabProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.ExpectedCount;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 @Tag("integration")
 class YnabOAuthServiceIT {
 
-    private WireMockServer wireMockServer;
+    private MockRestServiceServer server;
+    private RestClient.Builder restClientBuilder;
 
     @BeforeEach
     void setUp() {
-        wireMockServer = new WireMockServer(0);
-        wireMockServer.start();
-        configureFor("localhost", wireMockServer.port());
+        restClientBuilder = RestClient.builder()
+                .baseUrl("http://localhost");
+        server = MockRestServiceServer.bindTo(restClientBuilder).build();
     }
 
     @AfterEach
     void tearDown() {
-        wireMockServer.stop();
+        server.verify();
     }
 
     @Test
     void exchangesAuthCodeAndRefreshToken() {
-        stubFor(post(urlEqualTo("/oauth/token"))
-                .willReturn(okJson("""
-                        {"access_token":"a1","refresh_token":"r1"}
-                        """)));
-
         YnabProperties props = new YnabProperties(
-                "http://localhost:" + wireMockServer.port(),
-                "http://localhost:" + wireMockServer.port() + "/oauth/authorize",
-                "http://localhost:" + wireMockServer.port() + "/oauth/token",
+                "http://localhost",
+                "http://localhost/oauth/authorize",
+                "http://localhost/oauth/token",
                 "client-id",
                 "client-secret",
                 "https://app/callback"
         );
-        YnabOAuthService service = new YnabOAuthService(RestClient.builder(), props);
+        server.expect(ExpectedCount.times(2), requestTo("http://localhost/oauth/token"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {"access_token":"a1","refresh_token":"r1"}
+                        """, MediaType.APPLICATION_JSON));
+
+        YnabOAuthService service = new YnabOAuthService(restClientBuilder, props);
 
         YnabTokenResponse byCode = service.exchangeCode("code");
         YnabTokenResponse byRefresh = service.exchangeRefreshToken("refresh");
@@ -53,4 +60,3 @@ class YnabOAuthServiceIT {
         assertThat(service.buildAuthorizeUrl("state-1")).contains("state=state-1");
     }
 }
-

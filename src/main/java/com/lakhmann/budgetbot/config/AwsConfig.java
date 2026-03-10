@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.kms.KmsClient;
 
@@ -13,7 +14,7 @@ public class AwsConfig {
     @Bean
     public DynamoDbClient dynamoDbClient() {
         return DynamoDbClient.builder()
-                .region(Region.IL_CENTRAL_1)
+                .region(resolveRegion())
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
     }
@@ -21,8 +22,16 @@ public class AwsConfig {
     @Bean
     public KmsClient kmsClient() {
         return KmsClient.builder()
-                .region(Region.IL_CENTRAL_1)
+                .region(resolveRegion())
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
+    }
+
+    private Region resolveRegion() {
+        try {
+            return new DefaultAwsRegionProviderChain().getRegion();
+        } catch (Exception ex) {
+            return Region.IL_CENTRAL_1;
+        }
     }
 }

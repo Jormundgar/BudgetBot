@@ -1,0 +1,9 @@
+{
+  "name": "budgetbot-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.500.0"
+  }
+}

@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BudgetBot serverless stack (HTTP API + schedulers)
+Parameters:
+  BudgetbotSecretArn:
+    Type: String
+    Description: Secrets Manager ARN with BudgetBot secrets (JSON)
+  BudgetbotKmsKeyArn:
+    Type: String
+    Description: KMS key ARN used for refresh-token encryption and secret decryption
+  LegacyKmsKeyArn:
+    Type: String
+    Description: Legacy KMS key ARN used to decrypt existing encrypted data
+  DynamoRecipientsTable:
+    Type: String
+  DynamoBalanceStateTable:
+    Type: String
+  DynamoYnabConnectionsTable:
+    Type: String
+  SpringProfile:
+    Type: String
+    Default: prod
+  DailySchedule:
+    Type: String
+    Default: cron(0 7 * * ? *)
+  DailyScheduleTimezone:
+    Type: String
+    Default: Asia/Jerusalem
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 1024
+    Runtime: java17
+    Architectures:
+    - x86_64
+Resources:
+  BudgetbotHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+  BudgetbotApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: BudgetbotApiFunction
+      Handler: com.lakhmann.budgetbot.LambdaHandler::handleRequest
+      Environment:
+        Variables:
+          BUDGETBOT_SECRET_ARN:
+            Ref: BudgetbotSecretArn
+          DYNAMODB_RECIPIENTS_TABLE:
+            Ref: DynamoRecipientsTable
+          DYNAMODB_BALANCE_STATE_TABLE:
+            Ref: DynamoBalanceStateTable
+          DYNAMODB_YNAB_CONNECTIONS_TABLE:
+            Ref: DynamoYnabConnectionsTable
+          SPRING_PROFILES_ACTIVE:
+            Ref: SpringProfile
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:Scan
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoRecipientsTable}
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoBalanceStateTable}
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoYnabConnectionsTable}
+        - Effect: Allow
+          Action:
+          - kms:Encrypt
+          - kms:Decrypt
+          Resource:
+            Ref: BudgetbotKmsKeyArn
+        - Effect: Allow
+          Action:
+          - kms:Decrypt
+          Resource:
+            Ref: LegacyKmsKeyArn
+        - Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          Resource:
+            Ref: BudgetbotSecretArn
+      Events:
+        RootApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BudgetbotHttpApi
+            Path: /
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+        ProxyApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: BudgetbotHttpApi
+            Path: /{proxy+}
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+    Metadata:
+      SamResourceId: BudgetbotApiFunction
+  PollFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: PollFunction
+      Handler: poll.handler
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          BUDGETBOT_BASE_URL:
+            Fn::Sub: https://${BudgetbotHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+          BUDGETBOT_SECRET_ARN:
+            Ref: BudgetbotSecretArn
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - Statement:
+        - Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          Resource:
+            Ref: BudgetbotSecretArn
+        - Effect: Allow
+          Action:
+          - kms:Decrypt
+          Resource:
+            Ref: BudgetbotKmsKeyArn
+    Metadata:
+      SamResourceId: PollFunction
+  DailyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: DailyFunction
+      Handler: daily.handler
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          BUDGETBOT_BASE_URL:
+            Fn::Sub: https://${BudgetbotHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+          BUDGETBOT_SECRET_ARN:
+            Ref: BudgetbotSecretArn
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - Statement:
+        - Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          Resource:
+            Ref: BudgetbotSecretArn
+        - Effect: Allow
+          Action:
+          - kms:Decrypt
+          Resource:
+            Ref: BudgetbotKmsKeyArn
+    Metadata:
+      SamResourceId: DailyFunction
+  SchedulerInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: scheduler.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: scheduler-invoke-budgetbot
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::GetAtt:
+              - PollFunction
+              - Arn
+            - Fn::GetAtt:
+              - DailyFunction
+              - Arn
+  PollSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt:
+          - PollFunction
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - SchedulerInvokeRole
+          - Arn
+  DailyScheduleRule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression:
+        Ref: DailySchedule
+      ScheduleExpressionTimezone:
+        Ref: DailyScheduleTimezone
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt:
+          - DailyFunction
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - SchedulerInvokeRole
+          - Arn
+Outputs:
+  HttpApiId:
+    Value:
+      Ref: BudgetbotHttpApi
+  ApiBaseUrl:
+    Value:
+      Fn::Sub: https://${BudgetbotHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  ApiFunctionName:
+    Value:
+      Ref: BudgetbotApiFunction

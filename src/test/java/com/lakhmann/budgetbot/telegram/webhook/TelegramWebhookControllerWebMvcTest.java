@@ -7,17 +7,24 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TelegramWebhookController.class)
+@TestPropertySource(properties = {
+        "telegram.webhook-secret=secret"
+})
+@Import(TelegramWebhookControllerWebMvcTest.TestConfig.class)
 @Tag("slice")
 class TelegramWebhookControllerWebMvcTest {
 
@@ -28,15 +35,10 @@ class TelegramWebhookControllerWebMvcTest {
     private TelegramClient telegramClient;
 
     @MockBean
-    private TelegramProperties telegramProperties;
-
-    @MockBean
     private RecipientsStore recipientsStore;
 
     @Test
     void rejectsWhenSecretInvalid() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
-
         mockMvc.perform(post("/telegram/webhook")
                         .header("X-Telegram-Bot-Api-Secret-Token", "wrong")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -46,8 +48,6 @@ class TelegramWebhookControllerWebMvcTest {
 
     @Test
     void handlesStartCommand() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
-
         String payload = """
                 {
                   "message": {
@@ -69,8 +69,6 @@ class TelegramWebhookControllerWebMvcTest {
 
     @Test
     void ignoresNonStartCommand() throws Exception {
-        when(telegramProperties.webhookSecret()).thenReturn("secret");
-
         String payload = """
                 {
                   "message": {
@@ -88,5 +86,10 @@ class TelegramWebhookControllerWebMvcTest {
 
         verify(recipientsStore, never()).add(42L);
         verify(telegramClient, never()).ensureBottomKeyboard(42L);
+    }
+
+    @TestConfiguration
+    @EnableConfigurationProperties(TelegramProperties.class)
+    static class TestConfig {
     }
 }
