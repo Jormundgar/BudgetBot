@@ -63,4 +63,16 @@ class SecretsManagerEnvironmentPostProcessorTest {
         assertThat(env.getProperty("jobs.job-token")).isEqualTo("job-token");
         assertThat(env.getProperty("KMS_KEY_ID")).isEqualTo("kms-key");
     }
+
+    @Test
+    void skipsLoadingWhenDisabledByProperty() {
+        ConfigurableEnvironment env = new MockEnvironment()
+                .withProperty("budgetbot.secrets.enabled", "false")
+                .withProperty("budgetbot.secret.arn", "arn:aws:secretsmanager:il-central-1:111111111111:secret:test");
+
+        var processor = new SecretsManagerEnvironmentPostProcessor();
+        processor.postProcessEnvironment(env, new SpringApplication());
+
+        assertThat(env.getPropertySources().get("awsSecretsManager")).isNull();
+    }
 }

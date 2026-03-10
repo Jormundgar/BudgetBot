@@ -25,6 +25,7 @@ public class SecretsManagerEnvironmentPostProcessor implements EnvironmentPostPr
     private static final Logger log = LoggerFactory.getLogger(SecretsManagerEnvironmentPostProcessor.class);
     private static final String SECRET_ARN_ENV = "BUDGETBOT_SECRET_ARN";
     private static final String SECRET_ARN_PROP = "budgetbot.secret.arn";
+    private static final String SECRETS_ENABLED_PROP = "budgetbot.secrets.enabled";
     private static final String PROPERTY_SOURCE_NAME = "awsSecretsManager";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static Supplier<SecretsManagerClient> clientSupplier = SecretsManagerEnvironmentPostProcessor::defaultClient;
@@ -42,6 +43,9 @@ public class SecretsManagerEnvironmentPostProcessor implements EnvironmentPostPr
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        if (!Boolean.parseBoolean(environment.getProperty(SECRETS_ENABLED_PROP, "true"))) {
+            return;
+        }
         String secretArn = resolveSecretArn(environment);
         if (secretArn == null || secretArn.isBlank()) {
             return;
