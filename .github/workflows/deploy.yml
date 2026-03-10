@@ -122,7 +122,15 @@ jobs:
 
       - name: SAM build
         run: |
-          sam build
+          set -o pipefail
+          SAM_CLI_TELEMETRY=0 sam build --use-container --debug 2>&1 | tee sam-build.log
+
+      - name: Upload SAM build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam-build-log
+          path: sam-build.log
 
       - name: SAM deploy
         run: |
