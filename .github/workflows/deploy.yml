@@ -117,9 +117,10 @@ jobs:
 
       - name: Normalize Daily Schedule
         run: |
-          if [ -z "$DAILY_SCHEDULE" ] || [[ "$DAILY_SCHEDULE" != *" "* ]]; then
-            echo "DAILY_SCHEDULE=cron(0 7 * * ? *)" >> $GITHUB_ENV
+          if [ -z "${DAILY_SCHEDULE:-}" ] || [[ "$DAILY_SCHEDULE" != *" "* ]]; then
+            DAILY_SCHEDULE='cron(0 7 * * ? *)'
           fi
+          printf 'DAILY_SCHEDULE=%s\n' "$DAILY_SCHEDULE" >> "$GITHUB_ENV"
 
       - name: Install AWS SAM CLI
         run: |
@@ -140,6 +141,17 @@ jobs:
 
       - name: SAM deploy
         run: |
+          PARAMS=(
+            "BudgetbotSecretArn=$BUDGETBOT_SECRET_ARN"
+            "BudgetbotKmsKeyArn=$BUDGETBOT_KMS_KEY_ARN"
+            "LegacyKmsKeyArn=$LEGACY_KMS_KEY_ARN"
+            "DynamoRecipientsTable=$DYNAMODB_RECIPIENTS_TABLE"
+            "DynamoBalanceStateTable=$DYNAMODB_BALANCE_STATE_TABLE"
+            "DynamoYnabConnectionsTable=$DYNAMODB_YNAB_CONNECTIONS_TABLE"
+            "SpringProfile=$SPRING_PROFILE"
+            "DailySchedule=$DAILY_SCHEDULE"
+            "DailyScheduleTimezone=$DAILY_SCHEDULE_TIMEZONE"
+          )
           sam deploy \
             --stack-name "$SAM_STACK_NAME" \
             --region "$AWS_REGION" \
@@ -147,13 +159,4 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --parameter-overrides \
-              BudgetbotSecretArn="$BUDGETBOT_SECRET_ARN" \
-              BudgetbotKmsKeyArn="$BUDGETBOT_KMS_KEY_ARN" \
-              LegacyKmsKeyArn="$LEGACY_KMS_KEY_ARN" \
-              DynamoRecipientsTable="$DYNAMODB_RECIPIENTS_TABLE" \
-              DynamoBalanceStateTable="$DYNAMODB_BALANCE_STATE_TABLE" \
-              DynamoYnabConnectionsTable="$DYNAMODB_YNAB_CONNECTIONS_TABLE" \
-              SpringProfile="$SPRING_PROFILE" \
-              DailySchedule="$DAILY_SCHEDULE" \
-              DailyScheduleTimezone="$DAILY_SCHEDULE_TIMEZONE"
+            --parameter-overrides "${PARAMS[@]}"
