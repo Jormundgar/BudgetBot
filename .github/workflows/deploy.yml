@@ -149,7 +149,7 @@ jobs:
             "DynamoBalanceStateTable=$DYNAMODB_BALANCE_STATE_TABLE"
             "DynamoYnabConnectionsTable=$DYNAMODB_YNAB_CONNECTIONS_TABLE"
             "SpringProfile=$SPRING_PROFILE"
-            "DailySchedule=$DAILY_SCHEDULE"
+            "DailySchedule=\"${DAILY_SCHEDULE}\""
             "DailyScheduleTimezone=$DAILY_SCHEDULE_TIMEZONE"
           )
           sam deploy \
