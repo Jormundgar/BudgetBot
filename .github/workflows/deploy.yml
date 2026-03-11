@@ -115,6 +115,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Normalize Daily Schedule
+        run: |
+          if [ -z "$DAILY_SCHEDULE" ] || [[ "$DAILY_SCHEDULE" != *" "* ]]; then
+            echo "DAILY_SCHEDULE=cron(0 7 * * ? *)" >> $GITHUB_ENV
+          fi
+
       - name: Install AWS SAM CLI
         run: |
           python -m pip install --upgrade pip
