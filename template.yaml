@@ -185,6 +185,9 @@ Resources:
       Target:
         Arn: !GetAtt DailyFunction.Arn
         RoleArn: !GetAtt SchedulerInvokeRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+          MaximumEventAgeInSeconds: 60
 
 Outputs:
   HttpApiId:
